@@ -51,10 +51,12 @@
             :year-series="yearSeries"
           />
 
-          <MembersSection v-if="isAll" :board="board" :chat-list="chatList" @select="sel = $event" />
+          <WordsSection num="03" :words="topWords" :emoji="topEmoji" />
+
+          <MembersSection v-if="isAll" num="04" :board="board" :chat-list="chatList" @select="sel = $event" />
 
           <AchievementsSection
-            :num="isAll ? '04' : '03'"
+            :num="isAll ? '05' : '04'"
             :is-all="isAll"
             :chat-name="chatName"
             :stats="stats"
@@ -62,7 +64,7 @@
             :done="done"
           />
 
-          <h2 class="sec"><span class="sec-n">{{ isAll ? '05' : '04' }}</span>{{ t('sections.infographic') }}</h2>
+          <h2 class="sec"><span class="sec-n">{{ isAll ? '06' : '05' }}</span>{{ t('sections.infographic') }}</h2>
           <InfographicPanel
             :is-all="isAll"
             :bucket="bucket"
@@ -89,6 +91,7 @@ import { setLocale } from './i18n/index.js'
 
 import UploadPanel from './components/UploadPanel.vue'
 import OverviewSection from './components/OverviewSection.vue'
+import WordsSection from './components/WordsSection.vue'
 import MembersSection from './components/MembersSection.vue'
 import AchievementsSection from './components/AchievementsSection.vue'
 import InfographicPanel from './components/InfographicPanel.vue'
@@ -106,6 +109,7 @@ const range = ref({ from: null, to: null }) // day numbers, null = open bound
 const {
   has, isEmpty, bounds, view,
   isAll, bucket, items, board, stats, vol, tm, yearSeries, chatList, chatName, ach, done, displayName,
+  topWords, topEmoji,
 } = useAnalytics(store, sel, range)
 
 watch(locale, (l) => { document.documentElement.lang = l }, { immediate: true })

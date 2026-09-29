@@ -43,6 +43,7 @@ export default {
     volume: 'Volume',
     time: 'Time',
     members: 'Members',
+    words: 'Words & emoji',
     titleAndAchievements: 'Title & achievements',
     chatCharacter: 'Chat character & achievements',
     infographic: 'Infographic',
@@ -75,6 +76,14 @@ export default {
     favoriteDayHintChat: 'the group is busiest on {day}',
     peakTime: 'Peak time',
     peakTimeHint: '{start}\u2013{end} accounts for {percent}% of messages',
+  },
+
+  words: {
+    wordsHeading: 'Top words',
+    emojiHeading: 'Favorite emoji',
+    noWords: 'Not enough text for a word cloud',
+    noEmoji: 'No emoji found',
+    times: '{count} times',
   },
 
   yearChart: {

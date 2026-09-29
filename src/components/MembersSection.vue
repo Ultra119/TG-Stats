@@ -1,7 +1,7 @@
 <template>
   <div class="export-section">
     <SectionDownload name="members" />
-    <h2 class="sec"><span class="sec-n">03</span>{{ t('sections.members') }}</h2>
+    <h2 class="sec"><span class="sec-n">{{ num }}</span>{{ t('sections.members') }}</h2>
 
     <v-card variant="flat" border>
       <v-table density="comfortable">
@@ -67,6 +67,7 @@ import { useFormatters } from '../composables/useFormatters.js'
 import SectionDownload from './SectionDownload.vue'
 
 defineProps({
+  num: { type: String, default: '04' }, // section number
   board: { type: Array, required: true },
   chatList: { type: Array, required: true },
 })

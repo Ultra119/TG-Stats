@@ -43,6 +43,7 @@ export default {
     volume: 'Объём',
     time: 'Время',
     members: 'Участники',
+    words: 'Слова и эмодзи',
     titleAndAchievements: 'Титул и достижения',
     chatCharacter: 'Характер и достижения чата',
     infographic: 'Инфографика',
@@ -75,6 +76,14 @@ export default {
     favoriteDayHintChat: 'чаще всего пишут по {day}',
     peakTime: 'Пик времени',
     peakTimeHint: 'основная доля: {start}\u2013{end}, {percent}% сообщений',
+  },
+
+  words: {
+    wordsHeading: 'Частые слова',
+    emojiHeading: 'Любимые эмодзи',
+    noWords: 'Недостаточно текста для облака слов',
+    noEmoji: 'Эмодзи не найдены',
+    times: '{count} раз',
   },
 
   yearChart: {

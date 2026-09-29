@@ -295,6 +295,7 @@ export function sliceBucket(bucket, from, to, monthOf) {
     if (day > out.last) out.last = day
   }
 
+  out.top = bucket.top ?? null // sparse per-day counts; ranked for the range by `rankTop`
   return out
 }
 
@@ -351,4 +352,23 @@ export function filterStore(store, range) {
     range: { from, to },
     full: false,
   }
+}
+export function rankTop(bucket, kind, range, limit) {
+  const list = bucket?.top?.[kind]
+  if (!list) return []
+
+  const rows = []
+  for (const e of list) {
+    let n = e.n
+    if (range) {
+      n = 0
+      for (let i = 0; i < e.d.length; i++) if (e.d[i] >= range.from && e.d[i] <= range.to) n += e.c[i]
+    }
+    if (n) rows.push({ key: e.k, n })
+  }
+  return rows.sort((x, y) => y.n - x.n).slice(0, limit)
+}
+
+export function emojiGlyph(key) {
+  return key.length === 1 ? key + '\uFE0F' : key // BMP symbols like ❤ need VS16 to render as emoji
 }

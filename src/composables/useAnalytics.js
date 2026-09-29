@@ -1,5 +1,5 @@
 import { computed, ref, toRaw, watch } from 'vue'
-import { PAGE_CHARS, calcStats, buildBoard, buildAchievements, buildYearSeries, filterStore } from '../analytics.js'
+import { PAGE_CHARS, calcStats, buildBoard, buildAchievements, buildYearSeries, filterStore, rankTop } from '../analytics.js'
 import { useFormatters } from './useFormatters.js'
 
 /**
@@ -147,11 +147,16 @@ export function useAnalytics(store, sel, range = ref({ from: null, to: null })) 
     chatList.value.map((c) => c.name || t('chatFiles.untitled')).join(' \u2192 '),
   )
 
+  const topRange = computed(() => (filtered.value ? view.value.range : null))
+  const topWords = computed(() => rankTop(bucket.value, 'words', topRange.value, 60))
+  const topEmoji = computed(() => rankTop(bucket.value, 'emoji', topRange.value, 24))
+
   const ach = computed(() => buildAchievements(stats.value, bucket.value.n))
   const done = computed(() => ach.value.filter((a) => a.c >= a.t).length)
 
   return {
     has, ready, isEmpty, filtered, bounds, view,
     isAll, bucket, items, board, stats, vol, tm, yearSeries, chatList, chatName, ach, done, displayName,
+    topWords, topEmoji,
   }
 }
