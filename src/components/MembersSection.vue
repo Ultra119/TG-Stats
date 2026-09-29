@@ -1,5 +1,7 @@
 <template>
   <div>
+    <h2 class="sec"><span class="sec-n">03</span>{{ t('sections.members') }}</h2>
+
     <v-card variant="flat" border>
       <v-table density="comfortable">
         <thead>
@@ -39,6 +41,22 @@
       </v-table>
     </v-card>
     <div class="s">{{ t('membersTable.hint') }}</div>
+
+    <!-- Source files (only when more than one chat) -->
+    <div
+      v-if="chatList.length > 1"
+      class="grid mt-3"
+      :style="{ gridTemplateColumns: `repeat(${Math.min(chatList.length, 4)}, 1fr)` }"
+    >
+      <v-card v-for="(c, i) in chatList" :key="i" variant="flat" border class="tile">
+        <div class="k">{{ t('chatFiles.label', { index: i + 1, total: chatList.length }) }}</div>
+        <div style="font-weight: 500">{{ c.name || t('chatFiles.untitled') }}</div>
+        <div class="s">
+          {{ t('chatFiles.range', { from: dstr(c.first), to: dstr(c.last) }) }}<br />
+          {{ t('chatFiles.messages', { count: fmt(c.n) }) }}
+        </div>
+      </v-card>
+    </div>
   </div>
 </template>
 
@@ -46,9 +64,12 @@
 import { useI18n } from 'vue-i18n'
 import { useFormatters } from '../composables/useFormatters.js'
 
-const { t } = useI18n()
-const { fmt } = useFormatters()
-
-defineProps({ board: { type: Array, required: true } })
+defineProps({
+  board: { type: Array, required: true },
+  chatList: { type: Array, required: true },
+})
 defineEmits(['select'])
+
+const { t } = useI18n()
+const { fmt, dstr } = useFormatters()
 </script>
