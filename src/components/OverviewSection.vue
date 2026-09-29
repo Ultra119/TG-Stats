@@ -27,7 +27,8 @@
     </div>
 
     <!-- 01 Volume / 02 Time: stat tiles -->
-    <template v-for="sec in tileSections" :key="sec.n">
+    <div v-for="sec in tileSections" :key="sec.n" class="export-section">
+      <SectionDownload :name="sec.key" />
       <h2 class="sec"><span class="sec-n">{{ sec.n }}</span>{{ t(sec.title) }}</h2>
       <div class="grid" :style="{ gridTemplateColumns: `repeat(${sec.cols}, 1fr)` }">
         <v-card v-for="row in sec.items" :key="row[0]" variant="flat" border class="tile">
@@ -36,52 +37,52 @@
           <div class="s">{{ row[2] }}</div>
         </v-card>
       </div>
-    </template>
+      <!-- Charts belong to section 02 and are exported together with it -->
+      <div v-if="sec.key === 'time'" class="grid g2 mt-3" style="grid-template-columns: 5fr 6fr">
+        <v-card variant="flat" border class="tile">
+          <div class="k">{{ t('yearChart.heading') }}</div>
+          <svg class="chart" viewBox="0 0 400 210" width="100%">
+            <g v-for="b in bars" :key="b.year">
+              <rect
+                :x="10 + b.x"
+                :y="190 - b.h"
+                :width="b.w"
+                :height="b.h"
+                fill="rgb(var(--v-theme-primary))"
+                :fill-opacity="b.year === stats.peakY[0] ? 1 : 0.35"
+              />
+              <text :x="10 + b.x + b.w / 2" :y="190 - b.h - 6" font-size="9" text-anchor="middle" fill="currentColor">{{ fmt(b.value) }}</text>
+              <text :x="10 + b.x + b.w / 2" y="204" font-size="10" text-anchor="middle" fill="currentColor" fill-opacity="0.7">{{ b.year }}</text>
+            </g>
+          </svg>
+          <div class="s">{{ yearSummary }}</div>
+        </v-card>
 
-    <!-- Charts: by year + weekday/hour heatmap -->
-    <div class="grid g2 mt-3" style="grid-template-columns: 5fr 6fr">
-      <v-card variant="flat" border class="tile">
-        <div class="k">{{ t('yearChart.heading') }}</div>
-        <svg class="chart" viewBox="0 0 400 210" width="100%">
-          <g v-for="b in bars" :key="b.year">
-            <rect
-              :x="10 + b.x"
-              :y="190 - b.h"
-              :width="b.w"
-              :height="b.h"
-              fill="rgb(var(--v-theme-primary))"
-              :fill-opacity="b.year === stats.peakY[0] ? 1 : 0.35"
-            />
-            <text :x="10 + b.x + b.w / 2" :y="190 - b.h - 6" font-size="9" text-anchor="middle">{{ fmt(b.value) }}</text>
-            <text :x="10 + b.x + b.w / 2" y="204" font-size="10" text-anchor="middle" fill-opacity="0.7">{{ b.year }}</text>
-          </g>
-        </svg>
-        <div class="s">{{ yearSummary }}</div>
-      </v-card>
+        <v-card variant="flat" border class="tile">
+          <div class="k">{{ t('heatmap.heading') }}</div>
+          <svg class="chart" viewBox="0 0 640 210" width="100%">
+            <text v-for="(d, i) in dow" :key="'d' + i" x="0" :y="22 + i * 26" font-size="11" fill="currentColor" fill-opacity="0.7">{{ d }}</text>
+            <text v-for="h in 8" :key="'h' + h" :x="34 + (h - 1) * 75" y="10" font-size="10" fill="currentColor" fill-opacity="0.7">{{ (h - 1) * 3 }}</text>
 
-      <v-card variant="flat" border class="tile">
-        <div class="k">{{ t('heatmap.heading') }}</div>
-        <svg class="chart" viewBox="0 0 640 210" width="100%">
-          <text v-for="(d, i) in dow" :key="'d' + i" x="0" :y="22 + i * 26" font-size="11" fill-opacity="0.7">{{ d }}</text>
-          <text v-for="h in 8" :key="'h' + h" :x="34 + (h - 1) * 75" y="10" font-size="10" fill-opacity="0.7">{{ (h - 1) * 3 }}</text>
-
-          <template v-for="(d, di) in dow" :key="'row' + di">
-            <rect
-              v-for="hIdx in 24"
-              :key="di + '-' + hIdx"
-              :x="34 + (hIdx - 1) * 25"
-              :y="16 + di * 26"
-              width="22"
-              height="22"
-              fill="rgb(var(--v-theme-primary))"
-              :fill-opacity="opacity(bucket.hd[di * 24 + hIdx - 1])"
-            >
-              <title>{{ d }} {{ hIdx - 1 }}:00 — {{ fmt(bucket.hd[di * 24 + hIdx - 1]) }}</title>
-            </rect>
-          </template>
-        </svg>
-      </v-card>
+            <template v-for="(d, di) in dow" :key="'row' + di">
+              <rect
+                v-for="hIdx in 24"
+                :key="di + '-' + hIdx"
+                :x="34 + (hIdx - 1) * 25"
+                :y="16 + di * 26"
+                width="22"
+                height="22"
+                fill="rgb(var(--v-theme-primary))"
+                :fill-opacity="opacity(bucket.hd[di * 24 + hIdx - 1])"
+              >
+                <title>{{ d }} {{ hIdx - 1 }}:00 — {{ fmt(bucket.hd[di * 24 + hIdx - 1]) }}</title>
+              </rect>
+            </template>
+          </svg>
+        </v-card>
+      </div>
     </div>
+
   </div>
 </template>
 
@@ -90,6 +91,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { computeYearBars, heatmapOpacity } from '../analytics.js'
 import { useFormatters } from '../composables/useFormatters.js'
+import SectionDownload from './SectionDownload.vue'
 
 const props = defineProps({
   modelValue: { type: String, required: true }, // selected member uid or '*'
@@ -107,8 +109,8 @@ const { t } = useI18n()
 const { fmt, dstr, pluralize, rawMessage } = useFormatters()
 
 const tileSections = computed(() => [
-  { n: '01', title: 'sections.volume', items: props.vol, cols: 5 },
-  { n: '02', title: 'sections.time', items: props.tm, cols: 3 },
+  { n: '01', key: 'volume', title: 'sections.volume', items: props.vol, cols: 5 },
+  { n: '02', key: 'time', title: 'sections.time', items: props.tm, cols: 3 },
 ])
 
 const bars = computed(() => computeYearBars(props.yearSeries, { containerWidth: 380 }))

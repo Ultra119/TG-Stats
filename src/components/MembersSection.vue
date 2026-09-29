@@ -1,5 +1,6 @@
 <template>
-  <div>
+  <div class="export-section">
+    <SectionDownload name="members" />
     <h2 class="sec"><span class="sec-n">03</span>{{ t('sections.members') }}</h2>
 
     <v-card variant="flat" border>
@@ -63,6 +64,7 @@
 <script setup>
 import { useI18n } from 'vue-i18n'
 import { useFormatters } from '../composables/useFormatters.js'
+import SectionDownload from './SectionDownload.vue'
 
 defineProps({
   board: { type: Array, required: true },

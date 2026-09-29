@@ -96,6 +96,10 @@ export default {
     emptyHint: 'Widen the range or pick another preset.',
   },
 
+  export: {
+    section: 'Save section as PNG',
+  },
+
   titleCard: {
     personalLabel: 'Your status',
     chatLabel: 'Chat character \u00b7 {chatName}',

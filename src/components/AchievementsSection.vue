@@ -1,5 +1,6 @@
 <template>
-  <div>
+  <div class="export-section">
+    <SectionDownload :name="isAll ? 'chat-character' : 'achievements'" />
     <h2 class="sec">
       <span class="sec-n">{{ num }}</span>
       {{ isAll ? t('sections.chatCharacter') : t('sections.titleAndAchievements') }}
@@ -34,6 +35,7 @@
 <script setup>
 import { useI18n } from 'vue-i18n'
 import { useFormatters } from '../composables/useFormatters.js'
+import SectionDownload from './SectionDownload.vue'
 
 defineProps({
   num: { type: String, required: true }, // section number, e.g. '03'

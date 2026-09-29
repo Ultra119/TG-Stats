@@ -96,6 +96,10 @@ export default {
     emptyHint: 'Расширьте диапазон или выберите другой пресет.',
   },
 
+  export: {
+    section: 'Сохранить раздел как PNG',
+  },
+
   titleCard: {
     personalLabel: 'Ваш статус',
     chatLabel: 'Характер чата \u00b7 {chatName}',
