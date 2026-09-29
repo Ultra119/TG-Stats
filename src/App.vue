@@ -76,7 +76,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, watch } from 'vue'
+import { shallowReactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createStore, addFiles, resetStore, loadDemo } from './parser.js'
 import { useAnalytics } from './composables/useAnalytics.js'
@@ -90,7 +90,7 @@ import InfographicPanel from './components/InfographicPanel.vue'
 
 const { t, locale } = useI18n()
 
-const store = reactive(createStore())
+const store = shallowReactive(createStore())
 const sel = ref('*') // '*' = whole chat, otherwise a member uid
 const busy = ref(false)
 const error = ref('')
@@ -101,25 +101,29 @@ const { has, isAll, bucket, items, board, stats, vol, tm, yearSeries, chatList, 
 
 watch(locale, (l) => { document.documentElement.lang = l }, { immediate: true })
 
-async function onPick(fileList) {
-  if (!fileList || !fileList.length) return
+async function run(task) {
   error.value = ''
   busy.value = true
   try {
-    await addFiles(store, fileList)
+    await task()
   } catch (e) {
     error.value = e.i18nKey ? t(e.i18nKey, e.i18nParams || {}) : e.message
   }
   busy.value = false
+}
+
+async function onPick(fileList) {
+  if (!fileList || !fileList.length) return
+  await run(() => addFiles(store, fileList))
   if (fileInput.value) fileInput.value.value = ''
 }
 
-function onReset() {
-  resetStore(store)
+async function onReset() {
+  await run(() => resetStore(store))
   sel.value = '*'
 }
 
 function onDemo() {
-  loadDemo(store)
+  return run(() => loadDemo(store))
 }
 </script>
