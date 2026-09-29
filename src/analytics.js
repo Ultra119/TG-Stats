@@ -1,0 +1,251 @@
+export const PAGE_CHARS = 1800
+
+const LOCALE_TAGS = { ru: 'ru-RU', en: 'en-US' }
+
+function localeTag(locale) {
+  return LOCALE_TAGS[locale] || locale
+}
+
+export function fmt(n, locale = 'en') {
+  return Math.round(n).toLocaleString(localeTag(locale))
+}
+
+/** `days` — day number (Date.UTC(...) / 864e5). */
+export function dstr(days, locale = 'en') {
+  return new Date(days * 864e5).toLocaleDateString(localeTag(locale), {
+    timeZone: 'UTC',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+}
+
+export function pluralize(n, forms) {
+  if (forms.length === 3) {
+    const mod100 = Math.abs(n) % 100
+    const mod10 = mod100 % 10
+    if (mod100 > 10 && mod100 < 20) return forms[2]
+    if (mod10 > 1 && mod10 < 5) return forms[1]
+    if (mod10 === 1) return forms[0]
+    return forms[2]
+  }
+  return Math.abs(n) === 1 ? forms[0] : forms[1]
+}
+
+export function spanParts(days) {
+  const years = Math.floor(days / 365.25)
+  const months = Math.floor((days % 365.25) / 30.44)
+  return { years, months, days }
+}
+
+/** Hour (any integer, wraps via %24) -> "14:00". */
+export function hh(hour) {
+  return `${String(((hour % 24) + 24) % 24).padStart(2, '0')}:00`
+}
+
+export function calcStats(bucket) {
+  const dayKeys = Object.keys(bucket.days).map(Number).sort((a, b) => a - b)
+
+  let best = 0
+  let run = 0
+  let prevDay = -9
+  let streakStart = 0
+  let record = 0
+  let recordDay = 0
+
+  for (const day of dayKeys) {
+    run = day === prevDay + 1 ? run + 1 : 1
+    if (run > best) {
+      best = run
+      streakStart = day - run + 1
+    }
+    prevDay = day
+    if (bucket.days[day] > record) {
+      record = bucket.days[day]
+      recordDay = day
+    }
+  }
+
+  const hoursTotal = Array(24).fill(0)
+  const weekdayTotal = Array(7).fill(0)
+  bucket.hd.forEach((v, i) => {
+    hoursTotal[i % 24] += v
+    weekdayTotal[Math.floor(i / 24)] += v
+  })
+
+  const peakHour = hoursTotal.indexOf(Math.max(...hoursTotal))
+
+  let windowStart = 0
+  let windowMax = 0
+  for (let s = 0; s < 24; s++) {
+    let sum = 0
+    for (let i = 0; i < 4; i++) sum += hoursTotal[(s + i) % 24]
+    if (sum > windowMax) {
+      windowMax = sum
+      windowStart = s
+    }
+  }
+
+  const byYear = {}
+  for (const monthKey in bucket.mon) {
+    const year = monthKey.slice(0, 4)
+    byYear[year] = (byYear[year] || 0) + bucket.mon[monthKey]
+  }
+
+  const peakYearEntry = Object.entries(byYear).sort((a, b) => b[1] - a[1])[0]
+  const peakMonthEntry = Object.entries(bucket.mon).sort((a, b) => b[1] - a[1])[0]
+  const favoriteDay = weekdayTotal.indexOf(Math.max(...weekdayTotal))
+  const daysSpan = bucket.last - bucket.first + 1
+  const avgLength = bucket.ch / bucket.n
+  const mediaShare = (bucket.ph + bucket.vd + bucket.st) / bucket.n
+
+  const partOfDayKey =
+    peakHour >= 5 && peakHour < 11 ? 'morning' :
+    peakHour >= 11 && peakHour < 17 ? 'afternoon' :
+    peakHour >= 17 && peakHour < 23 ? 'evening' : 'night'
+
+  const habitKey =
+    bucket.au / bucket.n > 0.1 ? 'voice' :
+    mediaShare > 0.2 ? 'visual' :
+    avgLength > 90 ? 'novelist' :
+    avgLength < 25 ? 'machineGun' : 'chatter'
+
+  return {
+    pd: partOfDayKey,
+    nn: habitKey,
+    best,
+    bs: streakStart,
+    run,
+    rec: record,
+    recD: recordDay,
+    ph: peakHour,
+    ws: windowStart,
+    share: windowMax / bucket.n,
+    yr: byYear,
+    fd: favoriteDay,
+    days: daysSpan,
+    active: dayKeys.length,
+    peakY: peakYearEntry || ['\u2014', 0],
+    peakMonthIndex: peakMonthEntry ? +peakMonthEntry[0].slice(5) - 1 : null,
+    peakMonthYear: peakMonthEntry ? peakMonthEntry[0].slice(0, 4) : null,
+    peakMv: peakMonthEntry ? peakMonthEntry[1] : 0,
+    avgLength,
+    mediaShare,
+  }
+}
+
+export function buildBoard(store, pageChars = PAGE_CHARS) {
+  const total = store.all.n
+  if (!total) return []
+
+  const rows = Object.entries(store.users)
+    .sort((a, b) => b[1].n - a[1].n)
+    .slice(0, 15)
+    .map(([id, user]) => {
+      const s = calcStats(user)
+      let nightMessages = 0
+      user.hd.forEach((v, i) => {
+        if (i % 24 < 6) nightMessages += v
+      })
+
+      return {
+        id,
+        name: user.name, // may be null (deleted account) — resolved to a translated placeholder in the UI
+        n: user.n,
+        share: user.n / total,
+        pages: user.ch / pageChars,
+        avg: user.ch / user.n,
+        ph: s.ph,
+        active: s.active,
+        best: s.best,
+        night: nightMessages / user.n,
+        media: (user.ph + user.vd + user.st) / user.n,
+        voice: user.au / user.n,
+        roles: [], // role keys, e.g. 'mostActive', 'nightOwl'
+      }
+    })
+
+  const eligible = rows.filter((r) => r.n >= Math.max(20, total * 0.02))
+  const assignRole = (key, roleKey, min = 0) => {
+    const winner = eligible.filter((r) => r[key] > min).sort((a, b) => b[key] - a[key])[0]
+    if (winner) winner.roles.push(roleKey)
+  }
+
+  if (eligible.length > 1) {
+    assignRole('n', 'mostActive')
+    assignRole('night', 'nightOwl', 0.1)
+    assignRole('avg', 'mostVerbose')
+    assignRole('media', 'mediaLover', 0.05)
+    assignRole('voice', 'voiceLover', 0.02)
+    assignRole('best', 'longestStreak')
+  }
+
+  return rows
+}
+
+export function buildAchievements(stats, totalMessages) {
+  if (!stats) return []
+
+  const d = stats.days
+  const defs = [
+    ['yearStreak', d, 365],
+    ['threeYearStreak', d, 1095],
+    ['fiveYearStreak', d, 1825],
+    ['veteran', d, 3650],
+
+    ['dayCentury', stats.rec, 100],
+    ['dayRush', stats.rec, 300],
+    ['dayThousand', stats.rec, 1000],
+
+    ['weekStreak', stats.best, 7],
+    ['monthStreak', stats.best, 30],
+    ['hundredStreak', stats.best, 100],
+    ['yearRoundStreak', stats.best, 365],
+
+    ['firstThousand', totalMessages, 1e3],
+    ['tenThousand', totalMessages, 1e4],
+    ['hundredThousand', totalMessages, 1e5],
+
+    ['consistency', stats.active, 100],
+    ['halfYearActive', stats.active, 365],
+    ['thousandDaysActive', stats.active, 1000],
+  ]
+
+  return defs.map(([id, current, target]) => ({ id, c: current, t: target }))
+}
+
+export function buildYearSeries(byYear) {
+  const years = Object.keys(byYear).sort()
+  if (!years.length) return []
+
+  const first = +years[0]
+  const last = +years[years.length - 1]
+
+  return Array.from({ length: last - first + 1 }, (_, i) => {
+    const year = String(first + i)
+    return { year, value: byYear[year] || 0 }
+  })
+}
+
+export function computeYearBars(series, { containerWidth, maxBarWidth = 46, maxBarHeight = 150 }) {
+  const n = series.length
+  if (!n) return []
+
+  const max = Math.max(...series.map((s) => s.value), 1)
+  const step = containerWidth / n
+  const width = Math.min(maxBarWidth, step * 0.68)
+
+  return series.map((s, i) => ({
+    year: s.year,
+    value: s.value,
+    w: width,
+    x: i * step + (step - width) / 2,
+    h: (s.value / max) * maxBarHeight,
+  }))
+}
+
+/** Returns a function v -> opacity (0.06..1), normalized against the max value in hd. */
+export function heatmapOpacity(hd) {
+  const max = Math.max(...hd, 1)
+  return (v) => (v ? 0.15 + 0.85 * Math.sqrt(v / max) : 0.06)
+}
