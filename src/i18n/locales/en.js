@@ -37,6 +37,7 @@ export default {
     monthsShort: ['mo.', 'mo.'],
     daysShort: ['day', 'days'],
     members: ['member', 'members'],
+    reactions: ['reaction', 'reactions'],
   },
 
   sections: {
@@ -44,6 +45,7 @@ export default {
     time: 'Time',
     members: 'Members',
     words: 'Words & emoji',
+    reactions: 'Reactions',
     titleAndAchievements: 'Title & achievements',
     chatCharacter: 'Chat character & achievements',
     infographic: 'Infographic',
@@ -81,9 +83,42 @@ export default {
   words: {
     wordsHeading: 'Top words',
     emojiHeading: 'Favorite emoji',
+    signatureHeading: 'Your signature words',
+    signatureHeadingChat: 'Members\u2019 signature words',
+    noSignature: 'No words yet that set you apart from the others',
     noWords: 'Not enough text for a word cloud',
     noEmoji: 'No emoji found',
     times: '{count} times',
+  },
+
+  reactions: {
+    total: 'Reactions in total',
+    received: 'Reactions received',
+    per100: 'Reactions per 100 messages',
+    per100All: 'chat average',
+    per100Hint: '{rate} per 100 messages',
+    reactedShare: 'Messages with reactions',
+    reactedShareHint: '{count} of {total}',
+    given: 'Reactions given',
+    givenHint: 'only those visible in the export',
+    topReaction: 'Top reaction',
+    receivedEmoji: 'Reactions your messages get',
+    chatEmoji: 'Most used reactions',
+    gaveEmoji: 'Reactions you give',
+    fans: 'Who reacts to you the most',
+    targets: 'Whom you react to the most',
+    pairs: 'Who reacts to whom the most',
+    topMessages: 'Most-reacted messages',
+    mediaMessage: 'Message without text',
+    noData: 'No data yet',
+    roles: {
+      mostReceived: 'Most reactions received',
+      mostLoved: 'Most \u201cliked\u201d messages',
+      mostGiving: 'Most generous with reactions',
+    },
+    roleReceived: 'Received: {count}',
+    roleRate: '{rate} reactions per 100 messages',
+    roleGiven: 'Given: {count}',
   },
 
   yearChart: {

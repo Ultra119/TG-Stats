@@ -53,12 +53,14 @@
             @save-page="onSavePage"
           />
 
-          <WordsSection num="03" :words="topWords" :emoji="topEmoji" />
+          <WordsSection :num="nums.words" :is-all="isAll" :words="topWords" :emoji="topEmoji" :signature="signature" />
 
-          <MembersSection v-if="isAll" num="04" :board="board" :chat-list="chatList" @select="sel = $event" />
+          <ReactionsSection v-if="reactions" :num="nums.reactions" :is-all="isAll" :data="reactions" />
+
+          <MembersSection v-if="isAll" :num="nums.members" :board="board" :chat-list="chatList" @select="sel = $event" />
 
           <AchievementsSection
-            :num="isAll ? '05' : '04'"
+            :num="nums.ach"
             :is-all="isAll"
             :chat-name="chatName"
             :stats="stats"
@@ -66,7 +68,7 @@
             :done="done"
           />
 
-          <h2 class="sec"><span class="sec-n">{{ isAll ? '06' : '05' }}</span>{{ t('sections.infographic') }}</h2>
+          <h2 class="sec"><span class="sec-n">{{ nums.info }}</span>{{ t('sections.infographic') }}</h2>
           <InfographicPanel
             :is-all="isAll"
             :bucket="bucket"
@@ -85,7 +87,7 @@
 </template>
 
 <script setup>
-import { shallowReactive, ref, watch } from 'vue'
+import { shallowReactive, ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createStore, addFiles, resetStore, loadDemo } from './lib/parser.js'
 import { useAnalytics } from './composables/useAnalytics.js'
@@ -96,6 +98,7 @@ import { buildPageHtml, savePage } from './lib/exportPage.js'
 import UploadPanel from './components/UploadPanel.vue'
 import OverviewSection from './components/OverviewSection.vue'
 import WordsSection from './components/WordsSection.vue'
+import ReactionsSection from './components/ReactionsSection.vue'
 import MembersSection from './components/MembersSection.vue'
 import AchievementsSection from './components/AchievementsSection.vue'
 import InfographicPanel from './components/InfographicPanel.vue'
@@ -115,8 +118,18 @@ const { dstr } = useFormatters()
 const {
   has, isEmpty, bounds, view,
   isAll, bucket, items, board, stats, vol, tm, yearSeries, chatList, chatName, ach, done, displayName,
-  topWords, topEmoji,
+  topWords, topEmoji, signature, reactions,
 } = useAnalytics(store, sel, range)
+
+// Section numbers depend on which optional sections are shown (reactions, members).
+const nums = computed(() => {
+  let i = 2
+  const next = () => String(++i).padStart(2, '0')
+  const words = next()
+  const reactionsNum = reactions.value ? next() : null
+  const members = isAll.value ? next() : null
+  return { words, reactions: reactionsNum, members, ach: next(), info: next() }
+})
 
 watch(locale, (l) => { document.documentElement.lang = l }, { immediate: true })
 

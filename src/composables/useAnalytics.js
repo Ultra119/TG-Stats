@@ -1,5 +1,8 @@
 import { computed, ref, toRaw, watch } from 'vue'
-import { PAGE_CHARS, calcStats, buildBoard, buildAchievements, buildYearSeries, filterStore, rankTop } from '../lib/analytics.js'
+import {
+  PAGE_CHARS, calcStats, buildBoard, buildAchievements, buildYearSeries, filterStore,
+  rankTop, signatureWords, reactionsGiven, topMessages, rankPairs, topPairs, buildReactionRoles,
+} from '../lib/analytics.js'
 import { useFormatters } from './useFormatters.js'
 
 /**
@@ -21,6 +24,7 @@ export function useAnalytics(store, sel, range = ref({ from: null, to: null })) 
         list: toRaw(store.list),
         files: toRaw(store.files),
         chats: store.chats,
+        pairs: toRaw(store.pairs),
       },
       range.value,
     ),
@@ -151,12 +155,49 @@ export function useAnalytics(store, sel, range = ref({ from: null, to: null })) 
   const topWords = computed(() => rankTop(bucket.value, 'words', topRange.value, 60))
   const topEmoji = computed(() => rankTop(bucket.value, 'emoji', topRange.value, 24))
 
+  // Signature words: one entry for the selected member, or one per top member for the whole chat.
+  const signature = computed(() => {
+    if (!ready.value) return []
+    const v = view.value
+    if (!isAll.value) return [{ id: sel.value, name: null, words: signatureWords(bucket.value, v.all, topRange.value, 15) }]
+    return Object.entries(v.users)
+      .sort((a, b) => b[1].n - a[1].n)
+      .slice(0, 6)
+      .map(([id, u]) => ({ id, name: u.name, words: signatureWords(u, v.all, topRange.value, 4) }))
+      .filter((s) => s.words.length)
+  })
+
+  // Reactions block (null when the chat has no reactions in the range).
+  const reactions = computed(() => {
+    if (!ready.value || !(view.value.all.rr > 0)) return null
+    const b = bucket.value
+    const range = topRange.value
+    const base = {
+      received: b.rr,
+      per100: b.n ? (b.rr / b.n) * 100 : 0,
+      reacted: b.rm,
+      total: b.n,
+      emoji: rankTop(b, 'react', range, 12),
+      messages: topMessages(b, range, 3).map((m) => ({ ...m, name: view.value.users[m.uid]?.name ?? null })),
+    }
+    if (isAll.value) {
+      return { ...base, roles: buildReactionRoles(view.value, range), pairs: topPairs(view.value.pairs, range, 3) }
+    }
+    return {
+      ...base,
+      given: reactionsGiven(b, range),
+      gaveEmoji: rankTop(b, 'gave', range, 12),
+      fans: rankPairs(view.value.pairs, range, 'a', sel.value, 5),
+      targets: rankPairs(view.value.pairs, range, 'r', sel.value, 5),
+    }
+  })
+
   const ach = computed(() => buildAchievements(stats.value, bucket.value.n))
   const done = computed(() => ach.value.filter((a) => a.c >= a.t).length)
 
   return {
     has, ready, isEmpty, filtered, bounds, view,
     isAll, bucket, items, board, stats, vol, tm, yearSeries, chatList, chatName, ach, done, displayName,
-    topWords, topEmoji,
+    topWords, topEmoji, signature, reactions,
   }
 }

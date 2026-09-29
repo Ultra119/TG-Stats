@@ -1,9 +1,15 @@
-export const DAY_HOUR_OFFSET = 6
+export const DAY_HOUR_OFFSET = 8
 export const DAY_LEN = DAY_HOUR_OFFSET + 24
 
-export const TOP_WORDS = 150
+export const TOP_WORDS = 150 // kept per bucket (full-period ranking); the UI shows fewer
 export const TOP_EMOJI = 60
-export const TOP_USERS = 30
+export const TOP_USERS = 30 // only the busiest members get their own word/emoji/reaction stats
+const SIG_LIMIT = 25 // signature-word candidates kept per member
+const SIG_MIN_COUNT = 4 // a word must be used at least this many times by the member (whole period)
+const SIG_MIN_MESSAGES = 30 // members with fewer messages get no signature words
+const PAIR_LIMIT = 300 // reactor -> author pairs kept
+const MSG_LIMIT = 8 // most-reacted messages kept per bucket
+const PREVIEW_LEN = 140
 
 const STOP = new Set(
   `это как так что чтобы или для при над под про без нет вот было были была был будет будто есть уже еще ещё
@@ -63,7 +69,14 @@ function tokenize(text) {
 
 /** Worker-only counters: day -> Map(token -> count). Never sent to the UI as is (see `snapshot`). */
 function createTok() {
-  return { w: new Map(), e: new Map() }
+  return {
+    w: new Map(), // words
+    e: new Map(), // emoji written in text + reactions given (by reaction date)
+    x: new Map(), // reaction emoji received (by message day)
+    y: new Map(), // reaction emoji given (by message day)
+    g: new Map(), // day -> reactions given (reactor known)
+    m: [], // most-reacted messages, best first
+  }
 }
 
 function bump(daysMap, day, keys, n = 1) {
@@ -80,29 +93,70 @@ function dayOfDate(date) {
   return Number.isNaN(day) ? null : day
 }
 
+function pushMessage(list, item) {
+  list.push(item)
+  list.sort((p, q) => q.n - p.n)
+  if (list.length > MSG_LIMIT) list.length = MSG_LIMIT
+}
+
 /**
- * Emoji reactions left on a message. Every reaction goes to the whole chat; the ones whose author is
- * listed in `recent` also go to that member's personal emoji stats, dated by the reaction itself.
+ * Reactions left on a message (`rcount` — total over all reaction types).
  */
-function ingestReactions(store, message, dayNum) {
-  for (const reaction of message.reactions || []) {
-    if (reaction.type !== 'emoji' || !reaction.emoji) continue
-    const key = reaction.emoji.replace(EMOJI_NOISE, '')
-    if (!key) continue
+function ingestReactions(store, message, dayNum, uid, userTok, rcount) {
+  if (!rcount) return
+  const all = store.tok.all
+  const breakdown = []
+
+  for (const reaction of message.reactions) {
+    const count = reaction.count || 0
+    const key = reaction.type === 'emoji' && reaction.emoji ? reaction.emoji.replace(EMOJI_NOISE, '') : ''
+    if (key) {
+      breakdown.push([key, count])
+      bump(userTok.x, dayNum, [key], count)
+      bump(all.x, dayNum, [key], count)
+    }
 
     const recent = Array.isArray(reaction.recent) ? reaction.recent : []
     for (const who of recent) {
-      const day = dayOfDate(who.date) ?? dayNum
-      bump(store.tok.all.e, day, [key])
-      if (who.from_id) {
-        const tok = store.tok.users[who.from_id] || (store.tok.users[who.from_id] = createTok())
-        bump(tok.e, day, [key])
+      const rid = who.from_id
+      if (rid && who.from) store.tok.names[rid] = store.tok.names[rid] || who.from
+      const reactorTok = rid ? store.tok.users[rid] || (store.tok.users[rid] = createTok()) : null
+
+      if (key) {
+        const day = dayOfDate(who.date) ?? dayNum
+        bump(all.e, day, [key])
+        if (reactorTok) {
+          bump(reactorTok.e, day, [key])
+          bump(reactorTok.y, dayNum, [key])
+        }
+      }
+      if (reactorTok) {
+        reactorTok.g.set(dayNum, (reactorTok.g.get(dayNum) || 0) + 1)
+        all.g.set(dayNum, (all.g.get(dayNum) || 0) + 1)
+        if (rid !== uid) {
+          const pairKey = `${uid}\t${rid}`
+          let days = store.tok.pairs.get(pairKey)
+          if (!days) store.tok.pairs.set(pairKey, (days = new Map()))
+          days.set(dayNum, (days.get(dayNum) || 0) + 1)
+        }
       }
     }
 
-    const rest = (reaction.count || 0) - recent.length
-    if (rest > 0) bump(store.tok.all.e, dayNum, [key], rest)
+    const rest = count - recent.length
+    if (key && rest > 0) bump(all.e, dayNum, [key], rest)
   }
+
+  const text = extractPlain(message.text).replace(/\s+/g, ' ').trim()
+  if (!text) return
+  const item = {
+    n: rcount,
+    day: dayNum,
+    uid,
+    text: text.length > PREVIEW_LEN ? `${text.slice(0, PREVIEW_LEN).trimEnd()}\u2026` : text,
+    em: breakdown.sort((p, q) => q[1] - p[1]).slice(0, 4),
+  }
+  pushMessage(userTok.m, item)
+  pushMessage(all.m, item)
 }
 
 function rankTokens(daysMap, limit) {
@@ -126,7 +180,92 @@ function rankTokens(daysMap, limit) {
   })
 }
 
-const buildTop = (tok) => ({ words: rankTokens(tok.w, TOP_WORDS), emoji: rankTokens(tok.e, TOP_EMOJI) })
+function sparseDays(dayMap) {
+  return { d: Int32Array.from(dayMap.keys()), c: Int32Array.from(dayMap.values()) }
+}
+
+const buildTop = (tok) => ({
+  words: rankTokens(tok.w, TOP_WORDS),
+  emoji: rankTokens(tok.e, TOP_EMOJI),
+  react: rankTokens(tok.x, 30), // reaction emoji received
+  gave: rankTokens(tok.y, 30), // reaction emoji given
+  giv: sparseDays(tok.g), // reactions given per day
+  msgs: tok.m, // most-reacted messages
+})
+
+function totalsOf(daysMap) {
+  const totals = new Map()
+  for (const m of daysMap.values()) for (const [k, c] of m) totals.set(k, (totals.get(k) || 0) + c)
+  return totals
+}
+
+function buildSignatures(store, tok, ids) {
+  const allTotals = totalsOf(tok.all.w)
+  const picked = {}
+  const wanted = new Set()
+
+  for (const id of ids) {
+    const user = store.users[id]
+    const restChars = store.all.ch - user.ch
+    if (user.n < SIG_MIN_MESSAGES || user.ch <= 0 || restChars <= 0) continue
+
+    const scored = []
+    for (const [word, cu] of totalsOf(tok.users[id].w)) {
+      if (cu < SIG_MIN_COUNT) continue
+      const cr = (allTotals.get(word) || 0) - cu
+      const ratio = (cu + 1) / user.ch / ((cr + 1) / restChars)
+      if (ratio >= 1.5) scored.push([word, Math.log(ratio) * Math.sqrt(cu)])
+    }
+    scored.sort((a, b) => b[1] - a[1])
+    picked[id] = scored.slice(0, SIG_LIMIT).map((x) => x[0])
+    for (const w of picked[id]) wanted.add(w)
+  }
+
+  const chatDays = new Map([...wanted].map((w) => [w, { d: [], c: [] }]))
+  for (const [day, m] of tok.all.w) {
+    for (const [w, p] of chatDays) {
+      const c = m.get(w)
+      if (c) {
+        p.d.push(day)
+        p.c.push(c)
+      }
+    }
+  }
+  const chatArrays = new Map([...chatDays].map(([w, p]) => [w, { ad: Int32Array.from(p.d), ac: Int32Array.from(p.c) }]))
+
+  const out = {}
+  for (const id in picked) {
+    const per = new Map(picked[id].map((w) => [w, { d: [], c: [] }]))
+    for (const [day, m] of tok.users[id].w) {
+      for (const [w, p] of per) {
+        const c = m.get(w)
+        if (c) {
+          p.d.push(day)
+          p.c.push(c)
+        }
+      }
+    }
+    // `ad`/`ac` arrays are shared between members (structured clone keeps the sharing)
+    out[id] = picked[id].map((w) => ({ k: w, d: Int32Array.from(per.get(w).d), c: Int32Array.from(per.get(w).c), ...chatArrays.get(w) }))
+  }
+  return out
+}
+
+/** Reactor -> author pairs, busiest first, with sparse per-day counts (self-reactions excluded). */
+function buildPairs(tok, users) {
+  const rows = []
+  for (const [key, days] of tok.pairs) {
+    let n = 0
+    for (const c of days.values()) n += c
+    rows.push([key, n, days])
+  }
+  rows.sort((a, b) => b[1] - a[1])
+
+  return rows.slice(0, PAIR_LIMIT).map(([key, n, days]) => {
+    const [a, r] = key.split('\t')
+    return { a, r, an: users[a]?.name ?? null, rn: tok.names[r] ?? users[r]?.name ?? null, n, ...sparseDays(days) }
+  })
+}
 
 export function createBucket(name = null) {
   return {
@@ -139,6 +278,8 @@ export function createBucket(name = null) {
     st: 0, // stickers
     hd: Array(168).fill(0),
     days: {},
+    rr: 0, // reactions received
+    rm: 0, // messages that got at least one reaction
     mon: {},
     dd: {}, // dayNum -> Int32Array(DAY_LEN)
     first: Infinity,
@@ -151,7 +292,7 @@ export function createStore() {
     users: {}, // uid -> bucket
     all: createBucket(null), // display name resolved via i18n ('members.wholeChat')
     seen: new Set(), // dedupe key across files: `${chatId}:${msgId}`
-    tok: { users: {}, all: createTok() }, // word/emoji counters
+    tok: { users: {}, all: createTok(), pairs: new Map(), names: {} }, // word/emoji/reaction counters (worker only, stripped by `snapshot`)
     files: [], // names of uploaded files
     chats: 0, // number of chats processed
     list: [], // [{ name, first, last, n, days }] — one entry per source chat; `days` is dayNum -> count, for range slicing
@@ -201,6 +342,9 @@ function ingestChat(store, chat) {
     const isVideo = mediaType === 'video_file' || mediaType === 'video_message' || mediaType === 'animation'
     const isAudio = mediaType === 'voice_message' || mediaType === 'audio_file'
 
+    let rcount = 0
+    if (Array.isArray(message.reactions)) for (const r of message.reactions) rcount += r.count || 0
+
     for (const bucket of [user, store.all]) {
       bucket.n++
       bucket.ch += len
@@ -216,6 +360,12 @@ function ingestChat(store, chat) {
       if (isVideo) rec[3]++
       else if (isAudio) rec[4]++
       else if (mediaType === 'sticker') rec[5]++
+      if (rcount) {
+        bucket.rr += rcount
+        bucket.rm++
+        rec[6] += rcount
+        rec[7]++
+      }
       rec[DAY_HOUR_OFFSET + hour]++
 
       bucket.hd[((dayNum + 3) % 7) * 24 + hour]++
@@ -233,7 +383,7 @@ function ingestChat(store, chat) {
       }
     }
 
-    ingestReactions(store, message, dayNum)
+    ingestReactions(store, message, dayNum, uid, userTok, rcount)
 
     count++
     chatDays[dayNum] = (chatDays[dayNum] || 0) + 1
@@ -265,9 +415,10 @@ export function snapshot(store) {
 
   const users = { ...store.users }
   const busiest = Object.keys(users).sort((a, b) => users[b].n - users[a].n).slice(0, TOP_USERS)
-  for (const id of busiest) users[id] = { ...users[id], top: buildTop(tok.users[id]) }
+  const sig = buildSignatures(store, tok, busiest)
+  for (const id of busiest) users[id] = { ...users[id], top: buildTop(tok.users[id]), sig: sig[id] || null }
 
-  return { ...rest, users, all: { ...store.all, top: buildTop(tok.all) } }
+  return { ...rest, users, all: { ...store.all, top: buildTop(tok.all) }, pairs: buildPairs(tok, store.users) }
 }
 
 const DEMO_WORDS = `coffee weekend movie tonight dinner music sunset project deadline birthday travel airport pizza concert
@@ -283,6 +434,23 @@ function demoText(target, shift) {
   }
   if (Math.random() < 0.3) text += ' ' + DEMO_EMOJI[Math.floor(Math.random() ** 1.8 * DEMO_EMOJI.length)]
   return text
+}
+
+function demoReactions(isA, date, hour) {
+  if (Math.random() > 0.2) return {}
+  const emoji = new Set()
+  const pick = () => DEMO_EMOJI[Math.floor(Math.random() ** 1.8 * DEMO_EMOJI.length)]
+  emoji.add(pick())
+  if (Math.random() < 0.3) emoji.add(pick())
+  const day = date.toISOString().slice(0, 11)
+  return {
+    reactions: [...emoji].map((e) => ({
+      type: 'emoji',
+      count: 1,
+      emoji: e,
+      recent: [{ from: isA ? 'Sam' : 'Alex', from_id: isA ? 'u2' : 'u1', date: `${day}${String(hour).padStart(2, '0')}:59:00` }],
+    })),
+  }
 }
 
 export function ingestDemo(store) {
@@ -306,9 +474,7 @@ export function ingestDemo(store) {
       from: isA ? 'Alex' : 'Sam',
       from_id: isA ? 'u1' : 'u2',
       text: demoText(isA ? 10 + Math.floor(rnd() * 140) : 3 + Math.floor(rnd() * 40), isA ? 0 : 7),
-      ...(Math.random() < 0.15
-        ? { reactions: [{ type: 'emoji', count: 1, emoji: DEMO_EMOJI[Math.floor(rnd() ** 1.8 * DEMO_EMOJI.length)], recent: [{ from: isA ? 'Sam' : 'Alex', from_id: isA ? 'u2' : 'u1', date: `${date.toISOString().slice(0, 11)}${pad(hour)}:59:00` }] }] }
-        : {}),
+      ...demoReactions(isA, date, hour),
       ...(roll < 0.08 ? { photo: 'p.jpg' } : roll < 0.11 ? { media_type: 'voice_message' } : {}),
     })
   }

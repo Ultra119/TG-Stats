@@ -37,6 +37,7 @@ export default {
     monthsShort: ['мес.', 'мес.', 'мес.'],
     daysShort: ['день', 'дня', 'дней'],
     members: ['участник', 'участника', 'участников'],
+    reactions: ['реакция', 'реакции', 'реакций'],
   },
 
   sections: {
@@ -44,6 +45,7 @@ export default {
     time: 'Время',
     members: 'Участники',
     words: 'Слова и эмодзи',
+    reactions: 'Реакции',
     titleAndAchievements: 'Титул и достижения',
     chatCharacter: 'Характер и достижения чата',
     infographic: 'Инфографика',
@@ -81,9 +83,42 @@ export default {
   words: {
     wordsHeading: 'Частые слова',
     emojiHeading: 'Любимые эмодзи',
+    signatureHeading: 'Ваши фирменные слова',
+    signatureHeadingChat: 'Фирменные слова участников',
+    noSignature: 'Пока нет слов, по которым вы заметно отличаетесь от остальных',
     noWords: 'Недостаточно текста для облака слов',
     noEmoji: 'Эмодзи не найдены',
     times: '{count} раз',
+  },
+
+  reactions: {
+    total: 'Реакций всего',
+    received: 'Получено реакций',
+    per100: 'Реакций на 100 сообщений',
+    per100All: 'в среднем по чату',
+    per100Hint: '{rate} на 100 сообщений',
+    reactedShare: 'Сообщений с реакциями',
+    reactedShareHint: '{count} из {total}',
+    given: 'Поставлено реакций',
+    givenHint: 'учтены те, что видны в экспорте',
+    topReaction: 'Главная реакция',
+    receivedEmoji: 'Что ставят на ваши сообщения',
+    chatEmoji: 'Самые частые реакции',
+    gaveEmoji: 'Что ставите вы',
+    fans: 'Кто чаще всего реагирует на вас',
+    targets: 'Кому вы чаще ставите реакции',
+    pairs: 'Кто кому чаще всего реагирует',
+    topMessages: 'Самые залайканные сообщения',
+    mediaMessage: 'Сообщение без текста',
+    noData: 'Пока нет данных',
+    roles: {
+      mostReceived: 'Больше всех реакций получил',
+      mostLoved: 'Самые «залайканные» сообщения',
+      mostGiving: 'Щедрее всех на реакции',
+    },
+    roleReceived: 'Получено: {count}',
+    roleRate: '{rate} реакций на 100 сообщений',
+    roleGiven: 'Поставлено: {count}',
   },
 
   yearChart: {

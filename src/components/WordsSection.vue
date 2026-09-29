@@ -23,46 +23,55 @@
       <!-- Emoji -->
       <v-card variant="flat" border class="tile">
         <div class="k">{{ t('words.emojiHeading') }}</div>
-        <div v-if="emojiTiles.length" class="wc-emoji-grid">
-          <div v-for="e in emojiTiles" :key="e.key" class="wc-emoji" :title="t('words.times', { count: fmt(e.n) })">
-            <span class="wc-emoji-ch" :style="{ fontSize: e.size + 'px' }">{{ e.glyph }}</span>
-            <span class="wc-emoji-n">{{ fmt(e.n) }}</span>
-          </div>
-        </div>
-        <div v-else class="s">{{ t('words.noEmoji') }}</div>
+        <EmojiGrid :rows="emoji" :empty="t('words.noEmoji')" />
       </v-card>
     </div>
+
+    <v-card v-if="isAll ? signature.length : true" variant="flat" border class="tile mt-3">
+      <div class="k">{{ isAll ? t('words.signatureHeadingChat') : t('words.signatureHeading') }}</div>
+
+      <template v-if="signature.some((s) => s.words.length)">
+        <div v-for="s in signature" :key="s.id" class="wc-sig-row">
+          <div v-if="isAll" class="wc-sig-name">{{ s.name || t('members.deletedAccount') }}</div>
+          <div class="wc-sig-words">
+            <span v-for="w in s.words" :key="w.key" class="wc-chip" :title="t('words.times', { count: fmt(w.n) })">
+              {{ w.key }}<small>&times;{{ ratio(w.ratio) }}</small>
+            </span>
+          </div>
+        </div>
+      </template>
+      <div v-else class="s">{{ t('words.noSignature') }}</div>
+    </v-card>
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { emojiGlyph } from '../lib/analytics.js'
 import { useFormatters } from '../composables/useFormatters.js'
 import SectionDownload from './SectionDownload.vue'
+import EmojiGrid from './EmojiGrid.vue'
 
 const props = defineProps({
   num: { type: String, default: '03' }, // section number
+  isAll: { type: Boolean, default: false },
   words: { type: Array, required: true }, // [{ key, n }], sorted desc
   emoji: { type: Array, required: true }, // [{ key, n }], sorted desc
+  signature: { type: Array, default: () => [] }, // [{ id, name, words: [{ key, n, ratio }] }]
 })
 
 const { t } = useI18n()
-const { fmt } = useFormatters()
-
-/** 0..1 log-scaled position of `n` between the smallest and the largest count in `rows`. */
-function scaler(rows) {
-  const hi = Math.log(rows[0].n)
-  const lo = Math.log(rows[rows.length - 1].n)
-  return (n) => (hi === lo ? 1 : (Math.log(n) - lo) / (hi - lo))
-}
+const { fmt, locale } = useFormatters()
 
 const cloud = computed(() => {
-  if (!props.words.length) return []
-  const k = scaler(props.words)
-  const sized = props.words.map((w, i) => {
-    const s = k(w.n)
+  const rows = props.words
+  if (!rows.length) return []
+  const hi = Math.log(rows[0].n)
+  const lo = Math.log(rows[rows.length - 1].n)
+  const scale = (n) => (hi === lo ? 1 : (Math.log(n) - lo) / (hi - lo))
+
+  const sized = rows.map((w, i) => {
+    const s = scale(w.n)
     return { ...w, size: Math.round(13 + s * 31), opacity: +(0.55 + s * 0.45).toFixed(2), accent: i % 3 === 0 }
   })
   // the biggest words end up in the middle: 0 -> [0], 1 -> [0,1], 2 -> [2,0,1], ...
@@ -71,11 +80,8 @@ const cloud = computed(() => {
   return out
 })
 
-const emojiTiles = computed(() => {
-  if (!props.emoji.length) return []
-  const k = scaler(props.emoji)
-  return props.emoji.map((e) => ({ ...e, glyph: emojiGlyph(e.key), size: Math.round(22 + k(e.n) * 18) }))
-})
+const ratio = (r) =>
+  new Intl.NumberFormat(locale.value === 'ru' ? 'ru-RU' : 'en-US', { maximumFractionDigits: r >= 10 ? 0 : 1 }).format(r)
 </script>
 
 <style>
@@ -95,23 +101,36 @@ const emojiTiles = computed(() => {
 .wc-accent {
   color: rgb(var(--v-theme-primary));
 }
-.wc-emoji-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
-  gap: 10px 6px;
-  margin-top: 14px;
-}
-.wc-emoji {
+.wc-sig-row {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
+  align-items: baseline;
+  gap: 16px;
+  margin-top: 12px;
 }
-.wc-emoji-ch {
-  line-height: 1.2;
+.wc-sig-name {
+  flex: 0 0 140px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.wc-emoji-n {
+.wc-sig-words {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.wc-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  font-weight: 500;
+}
+.wc-chip small {
   font-size: 11px;
+  font-weight: 400;
   opacity: 0.65;
 }
 </style>

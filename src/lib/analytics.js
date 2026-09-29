@@ -284,6 +284,8 @@ export function sliceBucket(bucket, from, to, monthOf) {
     out.vd += rec[3]
     out.au += rec[4]
     out.st += rec[5]
+    out.rr += rec[6]
+    out.rm += rec[7]
 
     const weekdayBase = ((day + 3) % 7) * 24
     for (let h = 0; h < 24; h++) out.hd[weekdayBase + h] += rec[DAY_HOUR_OFFSET + h]
@@ -295,7 +297,8 @@ export function sliceBucket(bucket, from, to, monthOf) {
     if (day > out.last) out.last = day
   }
 
-  out.top = bucket.top ?? null // sparse per-day counts; ranked for the range by `rankTop`
+  out.top = bucket.top ?? null // sparse per-day counts; ranked for the range by `rankTop` & co.
+  out.sig = bucket.sig ?? null
   return out
 }
 
@@ -327,7 +330,7 @@ export function filterStore(store, range) {
   const to = Math.min(range?.to ?? last, last)
 
   if (from <= first && to >= last) {
-    return { users: store.users, all: store.all, list: store.list, files: store.files, chats: store.chats, range: { from: first, to: last }, full: true }
+    return { users: store.users, all: store.all, list: store.list, files: store.files, chats: store.chats, pairs: store.pairs || [], range: { from: first, to: last }, full: true }
   }
 
   const monthCache = new Map()
@@ -349,6 +352,7 @@ export function filterStore(store, range) {
     list: store.list.map((c) => sliceChat(c, from, to)).filter(Boolean),
     files: store.files,
     chats: store.chats,
+    pairs: store.pairs || [],
     range: { from, to },
     full: false,
   }
@@ -371,4 +375,95 @@ export function rankTop(bucket, kind, range, limit) {
 
 export function emojiGlyph(key) {
   return key.length === 1 ? key + '\uFE0F' : key // BMP symbols like ❤ need VS16 to render as emoji
+}
+function sumIn(d, c, range) {
+  let n = 0
+  for (let i = 0; i < d.length; i++) if (!range || (d[i] >= range.from && d[i] <= range.to)) n += c[i]
+  return n
+}
+
+export function signatureWords(bucket, allBucket, range, limit = 15) {
+  const own = bucket?.ch || 0
+  const rest = (allBucket?.ch || 0) - own
+  if (!bucket?.sig || own <= 0 || rest <= 0) return []
+
+  const rows = []
+  for (const e of bucket.sig) {
+    const cu = sumIn(e.d, e.c, range)
+    if (cu < 3) continue
+    const cr = Math.max(0, sumIn(e.ad, e.ac, range) - cu)
+    const ratio = (cu + 1) / own / ((cr + 1) / rest)
+    if (ratio >= 1.5) rows.push({ key: e.k, n: cu, ratio, score: Math.log(ratio) * Math.sqrt(cu) })
+  }
+  return rows.sort((a, b) => b.score - a.score).slice(0, limit)
+}
+
+/** Reactions given by a member in `range` (only the ones where Telegram lists the reactor). */
+export function reactionsGiven(bucket, range) {
+  const g = bucket?.top?.giv
+  return g ? sumIn(g.d, g.c, range) : 0
+}
+
+/** Most-reacted messages of a bucket that were sent within `range`. */
+export function topMessages(bucket, range, limit = 3) {
+  const list = bucket?.top?.msgs || []
+  return list.filter((m) => !range || (m.day >= range.from && m.day <= range.to)).slice(0, limit)
+}
+
+/**
+ * Reactor -> author pairs within `range`, grouped by the other side:
+ *   side 'a' — who reacts to messages of member `id` (grouped by reactor),
+ *   side 'r' — whose messages member `id` reacts to (grouped by author).
+ * Returns [{ id, name, n }], busiest first.
+ */
+export function rankPairs(pairs, range, side, id, limit = 5) {
+  const groups = new Map()
+  for (const p of pairs || []) {
+    if (p[side] !== id) continue
+    const n = sumIn(p.d, p.c, range)
+    if (!n) continue
+    const otherId = side === 'a' ? p.r : p.a
+    const name = side === 'a' ? p.rn : p.an
+    const g = groups.get(otherId) || { id: otherId, name: null, n: 0 }
+    g.n += n
+    g.name = g.name || name
+    groups.set(otherId, g)
+  }
+  return [...groups.values()].sort((x, y) => y.n - x.n).slice(0, limit)
+}
+
+/** The busiest reactor -> author pairs of the whole chat within `range`: [{ from, fromName, to, toName, n }]. */
+export function topPairs(pairs, range, limit = 3) {
+  return (pairs || [])
+    .map((p) => ({ from: p.r, fromName: p.rn, to: p.a, toName: p.an, n: sumIn(p.d, p.c, range) }))
+    .filter((p) => p.n)
+    .sort((x, y) => y.n - x.n)
+    .slice(0, limit)
+}
+
+/**
+ * Standout members for the reactions block of the whole-chat view.
+ * `view` — filtered store; returns [{ role, id, name, count?, rate? }] (at most 3, distinct where possible).
+ */
+export function buildReactionRoles(view, range) {
+  const total = view.all.n
+  const rows = Object.entries(view.users)
+    .filter(([, u]) => u.n >= Math.max(20, total * 0.02))
+    .map(([id, u]) => ({ id, name: u.name, received: u.rr, rate: u.rr / u.n, given: reactionsGiven(u, range) }))
+
+  if (rows.length < 2) return []
+
+  const roles = []
+  const best = (key, exclude = []) => rows.filter((r) => r[key] > 0 && !exclude.includes(r.id)).sort((a, b) => b[key] - a[key])[0]
+
+  const received = best('received')
+  if (received) roles.push({ role: 'mostReceived', id: received.id, name: received.name, count: received.received })
+
+  const loved = best('rate', received ? [received.id] : []) || best('rate')
+  if (loved) roles.push({ role: 'mostLoved', id: loved.id, name: loved.name, rate: loved.rate * 100 })
+
+  const giver = best('given')
+  if (giver) roles.push({ role: 'mostGiving', id: giver.id, name: giver.name, count: giver.given })
+
+  return roles
 }
