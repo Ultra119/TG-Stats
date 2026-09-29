@@ -1,5 +1,5 @@
 import { computed, ref, toRaw, watch } from 'vue'
-import { PAGE_CHARS, calcStats, buildBoard, buildAchievements, buildYearSeries, filterStore, rankTop } from '../analytics.js'
+import { PAGE_CHARS, calcStats, buildBoard, buildAchievements, buildYearSeries, filterStore, rankTop } from '../lib/analytics.js'
 import { useFormatters } from './useFormatters.js'
 
 /**

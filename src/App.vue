@@ -87,11 +87,11 @@
 <script setup>
 import { shallowReactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { createStore, addFiles, resetStore, loadDemo } from './parser.js'
+import { createStore, addFiles, resetStore, loadDemo } from './lib/parser.js'
 import { useAnalytics } from './composables/useAnalytics.js'
 import { setLocale } from './i18n/index.js'
 import { useFormatters } from './composables/useFormatters.js'
-import { buildPageHtml, savePage } from './exportPage.js'
+import { buildPageHtml, savePage } from './lib/exportPage.js'
 
 import UploadPanel from './components/UploadPanel.vue'
 import OverviewSection from './components/OverviewSection.vue'

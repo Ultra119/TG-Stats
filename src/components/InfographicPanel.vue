@@ -12,7 +12,7 @@
 <script setup>
 import { ref, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { PAGE_CHARS, computeYearBars } from '../analytics.js'
+import { PAGE_CHARS, computeYearBars } from '../lib/analytics.js'
 import { useFormatters } from '../composables/useFormatters.js'
 
 const props = defineProps({

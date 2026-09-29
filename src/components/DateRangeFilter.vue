@@ -44,7 +44,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { dayFromIso, isoFromDay, normalizeRange } from '../analytics.js'
+import { dayFromIso, isoFromDay, normalizeRange } from '../lib/analytics.js'
 
 const props = defineProps({
   modelValue: { type: Object, required: true },

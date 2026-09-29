@@ -21,7 +21,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useTheme } from 'vuetify'
-import { renderSectionToBlob } from '../exportSection.js'
+import { renderSectionToBlob } from '../lib/exportSection.js'
 
 const props = defineProps({
   name: { type: String, required: true }, // file name part: tg-stats-<name>.png

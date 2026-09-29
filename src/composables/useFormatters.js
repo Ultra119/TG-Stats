@@ -1,5 +1,5 @@
 import { useI18n } from 'vue-i18n'
-import { fmt as fmtRaw, dstr as dstrRaw, pluralize, spanParts, hh } from '../analytics.js'
+import { fmt as fmtRaw, dstr as dstrRaw, pluralize, spanParts, hh } from '../lib/analytics.js'
 
 /**
  * Thin bridge between the pure `analytics.js` helpers and vue-i18n: binds

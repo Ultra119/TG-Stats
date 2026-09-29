@@ -105,7 +105,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { computeYearBars, heatmapOpacity } from '../analytics.js'
+import { computeYearBars, heatmapOpacity } from '../lib/analytics.js'
 import { useFormatters } from '../composables/useFormatters.js'
 import SectionDownload from './SectionDownload.vue'
 

@@ -38,7 +38,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { emojiGlyph } from '../analytics.js'
+import { emojiGlyph } from '../lib/analytics.js'
 import { useFormatters } from '../composables/useFormatters.js'
 import SectionDownload from './SectionDownload.vue'
 
