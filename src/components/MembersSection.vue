@@ -41,7 +41,7 @@
         </tbody>
       </v-table>
     </v-card>
-    <div class="s">{{ t('membersTable.hint') }}</div>
+    <div class="s" data-export-skip>{{ t('membersTable.hint') }}</div>
 
     <!-- Source files (only when more than one chat) -->
     <div

@@ -109,6 +109,13 @@ export default {
     section: 'Save section as PNG',
   },
 
+  exportPage: {
+    button: 'Save page',
+    kickerChat: 'Chat summary',
+    kickerPersonal: 'Member summary',
+    footer: 'Generated with tg-stats \u00b7 {date}',
+  },
+
   titleCard: {
     personalLabel: 'Your status',
     chatLabel: 'Chat character \u00b7 {chatName}',

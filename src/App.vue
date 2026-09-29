@@ -49,6 +49,8 @@
             :vol="vol"
             :tm="tm"
             :year-series="yearSeries"
+            :saving="saving"
+            @save-page="onSavePage"
           />
 
           <WordsSection num="03" :words="topWords" :emoji="topEmoji" />
@@ -88,6 +90,8 @@ import { useI18n } from 'vue-i18n'
 import { createStore, addFiles, resetStore, loadDemo } from './parser.js'
 import { useAnalytics } from './composables/useAnalytics.js'
 import { setLocale } from './i18n/index.js'
+import { useFormatters } from './composables/useFormatters.js'
+import { buildPageHtml, savePage } from './exportPage.js'
 
 import UploadPanel from './components/UploadPanel.vue'
 import OverviewSection from './components/OverviewSection.vue'
@@ -105,6 +109,8 @@ const busy = ref(false)
 const error = ref('')
 const fileInput = ref(null)
 const range = ref({ from: null, to: null }) // day numbers, null = open bound
+const saving = ref(false)
+const { dstr } = useFormatters()
 
 const {
   has, isEmpty, bounds, view,
@@ -134,6 +140,26 @@ async function onPick(fileList) {
 async function onReset() {
   await run(() => resetStore(store))
   sel.value = '*'
+}
+
+async function onSavePage() {
+  saving.value = true
+  error.value = ''
+  try {
+    const name = isAll.value ? chatName.value || t('members.wholeChat') : displayName(bucket.value.name)
+    const { from, to } = view.value.range
+    const html = await buildPageHtml({
+      title: name,
+      kicker: t(isAll.value ? 'exportPage.kickerChat' : 'exportPage.kickerPersonal'),
+      period: `${dstr(from)} \u2014 ${dstr(to)}`,
+      footer: t('exportPage.footer', { date: dstr(Math.floor(Date.now() / 864e5)) }),
+      lang: locale.value,
+    })
+    savePage(html, name)
+  } catch (e) {
+    error.value = e.message
+  }
+  saving.value = false
 }
 
 function onDemo() {

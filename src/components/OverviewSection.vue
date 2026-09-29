@@ -24,6 +24,22 @@
           })
         }}
       </div>
+      <v-btn
+        class="save-page-btn"
+        variant="outlined"
+        color="primary"
+        size="small"
+        :loading="saving"
+        style="margin-left: auto"
+        @click="$emit('save-page')"
+      >
+        <template #prepend>
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z" fill="currentColor" />
+          </svg>
+        </template>
+        {{ t('exportPage.button') }}
+      </v-btn>
     </div>
 
     <!-- 01 Volume / 02 Time: stat tiles -->
@@ -102,8 +118,9 @@ const props = defineProps({
   vol: { type: Array, required: true }, // [[label, value, hint], ...]
   tm: { type: Array, required: true },
   yearSeries: { type: Array, required: true }, // [{year, value}]
+  saving: { type: Boolean, default: false }, // "save page" in progress
 })
-defineEmits(['update:modelValue'])
+defineEmits(['update:modelValue', 'save-page'])
 
 const { t } = useI18n()
 const { fmt, dstr, pluralize, rawMessage } = useFormatters()

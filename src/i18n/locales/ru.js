@@ -109,6 +109,13 @@ export default {
     section: 'Сохранить раздел как PNG',
   },
 
+  exportPage: {
+    button: 'Сохранить страницу',
+    kickerChat: 'Итоги чата',
+    kickerPersonal: 'Итоги участника',
+    footer: 'Собрано в tg-stats \u00b7 {date}',
+  },
+
   titleCard: {
     personalLabel: 'Ваш статус',
     chatLabel: 'Характер чата \u00b7 {chatName}',
