@@ -1,3 +1,6 @@
+export const DAY_HOUR_OFFSET = 6
+export const DAY_LEN = DAY_HOUR_OFFSET + 24
+
 export function createBucket(name = null) {
   return {
     name,
@@ -10,6 +13,7 @@ export function createBucket(name = null) {
     hd: Array(168).fill(0),
     days: {},
     mon: {},
+    dd: {}, // dayNum -> Int32Array(DAY_LEN)
     first: Infinity,
     last: 0,
   }
@@ -22,7 +26,7 @@ export function createStore() {
     seen: new Set(), // dedupe key across files: `${chatId}:${msgId}`
     files: [], // names of uploaded files
     chats: 0, // number of chats processed
-    list: [], // [{ name, first, last, n }] — one entry per source chat, for migrated conversations
+    list: [], // [{ name, first, last, n, days }] — one entry per source chat; `days` is dayNum -> count, for range slicing
   }
 }
 
@@ -47,6 +51,7 @@ function ingestChat(store, chat) {
   let count = 0
   let first = Infinity
   let last = 0
+  const chatDays = {}
 
   for (const message of chat.messages || []) {
     if (message.type !== 'message' || !message.date) continue
@@ -64,14 +69,25 @@ function ingestChat(store, chat) {
     const monthKey = date.slice(0, 7)
     const len = extractLength(message.text)
     const mediaType = message.media_type
+    const isVideo = mediaType === 'video_file' || mediaType === 'video_message' || mediaType === 'animation'
+    const isAudio = mediaType === 'voice_message' || mediaType === 'audio_file'
 
     for (const bucket of [user, store.all]) {
       bucket.n++
       bucket.ch += len
       if (message.photo) bucket.ph++
-      if (mediaType === 'video_file' || mediaType === 'video_message' || mediaType === 'animation') bucket.vd++
-      else if (mediaType === 'voice_message' || mediaType === 'audio_file') bucket.au++
+      if (isVideo) bucket.vd++
+      else if (isAudio) bucket.au++
       else if (mediaType === 'sticker') bucket.st++
+
+      const rec = bucket.dd[dayNum] || (bucket.dd[dayNum] = new Int32Array(DAY_LEN))
+      rec[0]++
+      rec[1] += len
+      if (message.photo) rec[2]++
+      if (isVideo) rec[3]++
+      else if (isAudio) rec[4]++
+      else if (mediaType === 'sticker') rec[5]++
+      rec[DAY_HOUR_OFFSET + hour]++
 
       bucket.hd[((dayNum + 3) % 7) * 24 + hour]++
       bucket.days[dayNum] = (bucket.days[dayNum] || 0) + 1
@@ -81,12 +97,13 @@ function ingestChat(store, chat) {
     }
 
     count++
+    chatDays[dayNum] = (chatDays[dayNum] || 0) + 1
     if (dayNum < first) first = dayNum
     if (dayNum > last) last = dayNum
   }
 
   store.chats++
-  if (count) store.list.push({ name: chat.name || null, first, last, n: count })
+  if (count) store.list.push({ name: chat.name || null, first, last, n: count, days: chatDays })
   return count
 }
 

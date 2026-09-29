@@ -32,13 +32,18 @@
         <v-progress-linear v-if="busy" indeterminate height="2" class="mb-4" />
         <v-alert v-if="error" type="error" variant="tonal" density="compact" class="mb-4">{{ error }}</v-alert>
 
+        <DateRangeFilter v-if="has" v-model="range" :bounds="bounds" />
+        <v-alert v-if="isEmpty" type="info" variant="tonal" density="compact" class="mb-4">
+          {{ t('range.empty') }} &mdash; {{ t('range.emptyHint') }}
+        </v-alert>
+
         <UploadPanel v-if="!has" @files="onPick" @demo="onDemo" />
 
         <template v-else-if="stats">
           <OverviewSection
             v-model="sel"
             :items="items"
-            :store="store"
+            :store="view"
             :stats="stats"
             :bucket="bucket"
             :vol="vol"
@@ -87,6 +92,7 @@ import OverviewSection from './components/OverviewSection.vue'
 import MembersSection from './components/MembersSection.vue'
 import AchievementsSection from './components/AchievementsSection.vue'
 import InfographicPanel from './components/InfographicPanel.vue'
+import DateRangeFilter from './components/DateRangeFilter.vue'
 
 const { t, locale } = useI18n()
 
@@ -95,9 +101,12 @@ const sel = ref('*') // '*' = whole chat, otherwise a member uid
 const busy = ref(false)
 const error = ref('')
 const fileInput = ref(null)
+const range = ref({ from: null, to: null }) // day numbers, null = open bound
 
-const { has, isAll, bucket, items, board, stats, vol, tm, yearSeries, chatList, chatName, ach, done, displayName } =
-  useAnalytics(store, sel)
+const {
+  has, isEmpty, bounds, view,
+  isAll, bucket, items, board, stats, vol, tm, yearSeries, chatList, chatName, ach, done, displayName,
+} = useAnalytics(store, sel, range)
 
 watch(locale, (l) => { document.documentElement.lang = l }, { immediate: true })
 

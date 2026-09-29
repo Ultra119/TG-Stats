@@ -1,32 +1,56 @@
-import { computed } from 'vue'
-import { PAGE_CHARS, calcStats, buildBoard, buildAchievements, buildYearSeries } from '../analytics.js'
+import { computed, ref, toRaw, watch } from 'vue'
+import { PAGE_CHARS, calcStats, buildBoard, buildAchievements, buildYearSeries, filterStore } from '../analytics.js'
 import { useFormatters } from './useFormatters.js'
 
 /**
  * `store` — reactive() over createStore(), `sel` — ref with a member id or
- * '*' for the whole chat. This is where localized, ready-to-render strings
- * are assembled from the language-agnostic numbers produced by analytics.js —
- * components below it just render, they don't compose sentences.
+ * '*' for the whole chat, `range` — ref with { from, to } in day numbers
+ * (null = open bound; { from: null, to: null } = the whole period). Everything
+ * below (stats, board, tiles, achievements…) is computed over the range.
  */
-export function useAnalytics(store, sel) {
+export function useAnalytics(store, sel, range = ref({ from: null, to: null })) {
   const { t, rawMessage, fmt, dstr, hh, pluralize, formatSpan } = useFormatters()
 
   const has = computed(() => store.all.n > 0)
+  const bounds = computed(() => ({ min: store.all.first, max: store.all.last }))
+  const view = computed(() =>
+    filterStore(
+      {
+        users: toRaw(store.users),
+        all: toRaw(store.all),
+        list: toRaw(store.list),
+        files: toRaw(store.files),
+        chats: store.chats,
+      },
+      range.value,
+    ),
+  )
+  const filtered = computed(() => !view.value.full)
+  const isEmpty = computed(() => has.value && view.value.all.n === 0)
+  const ready = computed(() => has.value && !isEmpty.value)
+
+  watch(has, (loaded) => {
+    if (!loaded) range.value = { from: null, to: null }
+  })
+  watch(view, (v) => {
+    if (sel.value !== '*' && v.all.n > 0 && !v.users[sel.value]) sel.value = '*'
+  })
+
   const isAll = computed(() => sel.value === '*')
-  const bucket = computed(() => (isAll.value ? store.all : store.users[sel.value] || store.all))
+  const bucket = computed(() => (isAll.value ? view.value.all : view.value.users[sel.value] || view.value.all))
   const displayName = (name) => name || t('members.deletedAccount')
 
   const items = computed(() => [
-    { title: `${t('members.wholeChat')} \u00b7 ${fmt(store.all.n)}`, value: '*' },
-    ...Object.entries(store.users)
+    { title: `${t('members.wholeChat')} \u00b7 ${fmt(view.value.all.n)}`, value: '*' },
+    ...Object.entries(view.value.users)
       .sort((a, b) => b[1].n - a[1].n)
       .map(([id, u]) => ({ title: `${displayName(u.name)} \u00b7 ${fmt(u.n)}`, value: id })),
   ])
 
-  const board = computed(() => buildBoard(store, PAGE_CHARS))
+  const board = computed(() => buildBoard(view.value, PAGE_CHARS))
 
   const stats = computed(() => {
-    if (!has.value) return null
+    if (!ready.value) return null
     const raw = calcStats(bucket.value)
 
     if (!isAll.value) {
@@ -43,7 +67,7 @@ export function useAnalytics(store, sel) {
 
     const rows = board.value
     const top = rows[0]
-    const memberCount = Object.keys(store.users).length
+    const memberCount = Object.keys(view.value.users).length
     const tagKey =
       memberCount < 2 ? 'soloAuthor' :
       top.share > 0.7 ? 'monologue' :
@@ -81,13 +105,13 @@ export function useAnalytics(store, sel) {
   const tm = computed(() => {
     const s = stats.value
     const a = bucket.value
-    const observed = store.all.last - store.all.first + 1
+    const observed = view.value.range.to - view.value.range.from + 1
     const dowShort = rawMessage('dow.short')
     const dowGenitive = rawMessage('dow.genitive')
 
     return [
       [
-        isAll.value ? t('time.chatAge') : t('time.activityRange'),
+        isAll.value && !filtered.value ? t('time.chatAge') : t('time.activityRange'),
         formatSpan(s.days),
         `${dstr(a.first)} \u2014 ${dstr(a.last)}`,
       ],
@@ -118,7 +142,7 @@ export function useAnalytics(store, sel) {
   })
 
   const yearSeries = computed(() => buildYearSeries(stats.value?.yr || {}))
-  const chatList = computed(() => [...store.list].sort((a, b) => a.first - b.first))
+  const chatList = computed(() => [...view.value.list].sort((a, b) => a.first - b.first))
   const chatName = computed(() =>
     chatList.value.map((c) => c.name || t('chatFiles.untitled')).join(' \u2192 '),
   )
@@ -126,5 +150,8 @@ export function useAnalytics(store, sel) {
   const ach = computed(() => buildAchievements(stats.value, bucket.value.n))
   const done = computed(() => ach.value.filter((a) => a.c >= a.t).length)
 
-  return { has, isAll, bucket, items, board, stats, vol, tm, yearSeries, chatList, chatName, ach, done, displayName }
+  return {
+    has, ready, isEmpty, filtered, bounds, view,
+    isAll, bucket, items, board, stats, vol, tm, yearSeries, chatList, chatName, ach, done, displayName,
+  }
 }

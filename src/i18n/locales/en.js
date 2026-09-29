@@ -86,6 +86,16 @@ export default {
     heading: 'Hours \u00d7 weekdays',
   },
 
+  range: {
+    from: 'From',
+    to: 'To',
+    all: 'Whole period',
+    last30: 'Last 30 days',
+    lastYear: 'Last year',
+    empty: 'No messages in the selected period',
+    emptyHint: 'Widen the range or pick another preset.',
+  },
+
   titleCard: {
     personalLabel: 'Your status',
     chatLabel: 'Chat character \u00b7 {chatName}',

@@ -1,3 +1,5 @@
+import { createBucket, DAY_HOUR_OFFSET } from './parser.core.js'
+
 export const PAGE_CHARS = 1800
 
 const LOCALE_TAGS = { ru: 'ru-RU', en: 'en-US' }
@@ -248,4 +250,105 @@ export function computeYearBars(series, { containerWidth, maxBarWidth = 46, maxB
 export function heatmapOpacity(hd) {
   const max = Math.max(...hd, 1)
   return (v) => (v ? 0.15 + 0.85 * Math.sqrt(v / max) : 0.06)
+}
+
+/** 'YYYY-MM-DD' (as produced by <input type="date">) -> day number, or null. */
+export function dayFromIso(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '')
+  return m ? Math.floor(Date.UTC(+m[1], +m[2] - 1, +m[3]) / 864e5) : null
+}
+
+/** Day number -> 'YYYY-MM-DD'. */
+export function isoFromDay(day) {
+  return new Date(day * 864e5).toISOString().slice(0, 10)
+}
+
+export function normalizeRange(from, to, min, max) {
+  let a = Math.min(Math.max(from ?? min, min), max)
+  let b = Math.min(Math.max(to ?? max, min), max)
+  if (a > b) [a, b] = [b, a]
+  return { from: a <= min ? null : a, to: b >= max ? null : b }
+}
+
+export function sliceBucket(bucket, from, to, monthOf) {
+  const out = createBucket(bucket.name)
+
+  for (const key in bucket.dd) {
+    const day = +key
+    if (day < from || day > to) continue
+
+    const rec = bucket.dd[key]
+    out.n += rec[0]
+    out.ch += rec[1]
+    out.ph += rec[2]
+    out.vd += rec[3]
+    out.au += rec[4]
+    out.st += rec[5]
+
+    const weekdayBase = ((day + 3) % 7) * 24
+    for (let h = 0; h < 24; h++) out.hd[weekdayBase + h] += rec[DAY_HOUR_OFFSET + h]
+
+    out.days[day] = rec[0]
+    const monthKey = monthOf(day)
+    out.mon[monthKey] = (out.mon[monthKey] || 0) + rec[0]
+    if (day < out.first) out.first = day
+    if (day > out.last) out.last = day
+  }
+
+  return out
+}
+
+function sliceChat(chat, from, to) {
+  let n = 0
+  let first = Infinity
+  let last = 0
+
+  for (const key in chat.days) {
+    const day = +key
+    if (day < from || day > to) continue
+    n += chat.days[key]
+    if (day < first) first = day
+    if (day > last) last = day
+  }
+
+  return n ? { name: chat.name, first, last, n } : null
+}
+
+/**
+ * `store` — { users, all, list, files, chats }, `range` — { from, to } (nullable).
+ * Returns a store-shaped view restricted to the range, plus:
+ *   range — the effective (clamped) bounds, always numbers;
+ *   full  — true when the range covers all the data (buckets are then passed through untouched).
+ */
+export function filterStore(store, range) {
+  const { first, last } = store.all
+  const from = Math.max(range?.from ?? first, first)
+  const to = Math.min(range?.to ?? last, last)
+
+  if (from <= first && to >= last) {
+    return { users: store.users, all: store.all, list: store.list, files: store.files, chats: store.chats, range: { from: first, to: last }, full: true }
+  }
+
+  const monthCache = new Map()
+  const monthOf = (day) => {
+    let key = monthCache.get(day)
+    if (!key) monthCache.set(day, (key = new Date(day * 864e5).toISOString().slice(0, 7)))
+    return key
+  }
+
+  const users = {}
+  for (const id in store.users) {
+    const sliced = sliceBucket(store.users[id], from, to, monthOf)
+    if (sliced.n) users[id] = sliced
+  }
+
+  return {
+    users,
+    all: sliceBucket(store.all, from, to, monthOf),
+    list: store.list.map((c) => sliceChat(c, from, to)).filter(Boolean),
+    files: store.files,
+    chats: store.chats,
+    range: { from, to },
+    full: false,
+  }
 }

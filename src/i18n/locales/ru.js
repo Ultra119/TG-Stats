@@ -86,6 +86,16 @@ export default {
     heading: 'Часы \u00d7 дни недели',
   },
 
+  range: {
+    from: 'С',
+    to: 'По',
+    all: 'Весь период',
+    last30: 'Последние 30 дней',
+    lastYear: 'Последний год',
+    empty: 'В выбранном периоде нет сообщений',
+    emptyHint: 'Расширьте диапазон или выберите другой пресет.',
+  },
+
   titleCard: {
     personalLabel: 'Ваш статус',
     chatLabel: 'Характер чата \u00b7 {chatName}',
