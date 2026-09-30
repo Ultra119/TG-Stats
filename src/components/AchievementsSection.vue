@@ -10,6 +10,7 @@
     <v-card variant="flat" border class="tile" style="padding: 24px">
       <div class="k">{{ isAll ? t('titleCard.chatLabel', { chatName }) : t('titleCard.personalLabel') }}</div>
       <div class="status">{{ stats.title }}</div>
+      <div v-if="roles.length" class="character">{{ roles.join(', ') }}</div>
       <div class="s">{{ stats.why }}</div>
     </v-card>
 
@@ -44,8 +45,19 @@ defineProps({
   stats: { type: Object, required: true }, // needs: title, why
   ach: { type: Array, required: true }, // [{id, c, t}]
   done: { type: Number, required: true },
+  roles: { type: Array, default: () => [] }, // translated role names of the member (personal view), listed after the title
 })
 
 const { t } = useI18n()
 const { fmt } = useFormatters()
 </script>
+
+<style>
+.character {
+  margin: 2px 0 10px;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: rgb(var(--v-theme-primary));
+}
+</style>

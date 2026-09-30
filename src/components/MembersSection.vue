@@ -23,7 +23,9 @@
             <td>
               <div style="font-weight: 500">{{ r.name || t('members.deletedAccount') }}</div>
               <div class="roles">
-                <span v-for="roleKey in r.roles" :key="roleKey">{{ t(`roles.${roleKey}`) }}</span>
+                <span v-for="roleKey in r.roles" :key="roleKey" :title="roleTitle(roleKey, r.roleValues[roleKey])">{{
+                  t(`roles.${roleKey}`)
+                }}</span>
               </div>
             </td>
             <td>
@@ -74,5 +76,19 @@ defineProps({
 defineEmits(['select'])
 
 const { t } = useI18n()
-const { fmt, dstr } = useFormatters()
+const { fmt, dstr, locale } = useFormatters()
+
+const PERCENT_ROLES = new Set(['nightOwl', 'earlyBird', 'weekendWarrior', 'photographer', 'stickerFan', 'videoLover', 'voiceLover', 'steady'])
+const nf1 = (n) => new Intl.NumberFormat(locale.value === 'ru' ? 'ru-RU' : 'en-US', { maximumFractionDigits: 1 }).format(n)
+
+/** Tooltip of a role chip: what exactly the member won it with. */
+function roleTitle(key, v) {
+  if (v == null) return ''
+  const value =
+    PERCENT_ROLES.has(key) ? `${Math.round(v * 100)}%` :
+    key === 'oldTimer' || key === 'newcomer' ? dstr(v) :
+    key === 'loved' ? nf1(v * 100) :
+    key === 'emojiFan' ? nf1(v) : fmt(v)
+  return t(`roleHints.${key}`, { value })
+}
 </script>

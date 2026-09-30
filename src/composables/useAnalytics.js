@@ -53,6 +53,9 @@ export function useAnalytics(store, sel, range = ref({ from: null, to: null })) 
 
   const board = computed(() => buildBoard(view.value, PAGE_CHARS))
 
+  // Role keys of the selected member (empty for the whole chat) — the roles are earned against the rest of the chat.
+  const myRoles = computed(() => (isAll.value ? [] : board.value.find((r) => r.id === sel.value)?.roles ?? []))
+
   const stats = computed(() => {
     if (!ready.value) return null
     const raw = calcStats(bucket.value)
@@ -198,6 +201,6 @@ export function useAnalytics(store, sel, range = ref({ from: null, to: null })) 
   return {
     has, ready, isEmpty, filtered, bounds, view,
     isAll, bucket, items, board, stats, vol, tm, yearSeries, chatList, chatName, ach, done, displayName,
-    topWords, topEmoji, signature, reactions,
+    topWords, topEmoji, signature, reactions, myRoles,
   }
 }

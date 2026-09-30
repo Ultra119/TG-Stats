@@ -66,6 +66,7 @@
             :stats="stats"
             :ach="ach"
             :done="done"
+            :roles="myRoles.map((k) => t(`roles.${k}`))"
           />
 
           <h2 class="sec"><span class="sec-n">{{ nums.info }}</span>{{ t('sections.infographic') }}</h2>
@@ -118,7 +119,7 @@ const { dstr } = useFormatters()
 const {
   has, isEmpty, bounds, view,
   isAll, bucket, items, board, stats, vol, tm, yearSeries, chatList, chatName, ach, done, displayName,
-  topWords, topEmoji, signature, reactions,
+  topWords, topEmoji, signature, reactions, myRoles,
 } = useAnalytics(store, sel, range)
 
 // Section numbers depend on which optional sections are shown (reactions, members).

@@ -139,16 +139,24 @@ export function calcStats(bucket) {
 export function buildBoard(store, pageChars = PAGE_CHARS) {
   const total = store.all.n
   if (!total) return []
+  const range = store.full === false ? store.range : null
 
   const rows = Object.entries(store.users)
     .sort((a, b) => b[1].n - a[1].n)
     .slice(0, 15)
     .map(([id, user]) => {
       const s = calcStats(user)
-      let nightMessages = 0
+      let night = 0 // 00-06
+      let early = 0 // 06-10
+      let weekend = 0 // Sat + Sun
       user.hd.forEach((v, i) => {
-        if (i % 24 < 6) nightMessages += v
+        const hour = i % 24
+        if (hour < 6) night += v
+        else if (hour < 10) early += v
+        if (i >= 120) weekend += v
       })
+      const emoji = rankTop(user, 'emoji', range, 60).reduce((sum, e) => sum + e.n, 0)
+      const span = user.last - user.first + 1
 
       return {
         id,
@@ -160,26 +168,61 @@ export function buildBoard(store, pageChars = PAGE_CHARS) {
         ph: s.ph,
         active: s.active,
         best: s.best,
-        night: nightMessages / user.n,
+        record: s.rec, // most messages in a single day
+        reg: span >= 30 ? s.active / span : 0, // share of days with at least one message
+        first: user.first,
+        night: night / user.n,
+        early: early / user.n,
+        weekend: weekend / user.n,
         media: (user.ph + user.vd + user.st) / user.n,
+        photo: user.ph / user.n,
+        video: user.vd / user.n,
+        sticker: user.st / user.n,
         voice: user.au / user.n,
+        emoji: emoji / user.n, // emoji per message (text + reactions given)
+        loved: user.rr / user.n, // reactions received per message
+        given: reactionsGiven(user, range), // reactions given
         roles: [], // role keys, e.g. 'mostActive', 'nightOwl'
+        roleValues: {}, // role key -> the number behind it (for tooltips)
       }
     })
 
   const eligible = rows.filter((r) => r.n >= Math.max(20, total * 0.02))
-  const assignRole = (key, roleKey, min = 0) => {
-    const winner = eligible.filter((r) => r[key] > min).sort((a, b) => b[key] - a[key])[0]
-    if (winner) winner.roles.push(roleKey)
+
+  const award = (roleKey, score, { min = 0, lowest = false, limit = Infinity, show = null } = {}) => {
+    const candidates = eligible
+      .map((r) => [r, score(r)])
+      .filter(([, v]) => Number.isFinite(v) && (lowest ? v < limit : v > min))
+      .sort((a, b) => (lowest ? a[1] - b[1] : b[1] - a[1]))
+    if (!candidates.length) return
+    const [winner, value] = candidates[0]
+    winner.roles.push(roleKey)
+    winner.roleValues[roleKey] = show ? show(winner) : value
   }
 
   if (eligible.length > 1) {
-    assignRole('n', 'mostActive')
-    assignRole('night', 'nightOwl', 0.1)
-    assignRole('avg', 'mostVerbose')
-    assignRole('media', 'mediaLover', 0.05)
-    assignRole('voice', 'voiceLover', 0.02)
-    assignRole('best', 'longestStreak')
+    award('mostActive', (r) => r.n)
+    award('nightOwl', (r) => r.night, { min: 0.1 })
+    award('earlyBird', (r) => r.early, { min: 0.2 })
+    award('weekendWarrior', (r) => r.weekend, { min: 0.4 })
+    award('mostVerbose', (r) => r.avg)
+    award('laconic', (r) => r.avg, { lowest: true, limit: 30 })
+    award('photographer', (r) => r.photo, { min: 0.05 })
+    award('stickerFan', (r) => r.sticker, { min: 0.05 })
+    award('videoLover', (r) => r.video, { min: 0.02 })
+    award('voiceLover', (r) => r.voice, { min: 0.02 })
+    award('emojiFan', (r) => r.emoji, { min: 0.15 })
+    award('loved', (r) => r.loved, { min: 0.1 })
+    award('generous', (r) => r.given, { min: 10 })
+    award('longestStreak', (r) => r.best)
+    award('sprinter', (r) => r.record, { min: 30 })
+    award('steady', (r) => r.reg, { min: 0.3 })
+
+    const firsts = eligible.map((r) => r.first)
+    if (Math.max(...firsts) - Math.min(...firsts) >= 60) {
+      award('oldTimer', (r) => -r.first, { min: -Infinity, show: (r) => r.first })
+      award('newcomer', (r) => r.first, { min: -Infinity })
+    }
   }
 
   return rows
