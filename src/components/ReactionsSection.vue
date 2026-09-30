@@ -83,7 +83,7 @@
             <span class="rx-who">{{ p.name || t('members.deletedAccount') }}</span>
             <div style="display: flex; align-items: center; gap: 10px">
               <div class="bar"><i :style="{ width: (p.n / list.rows[0].n) * 100 + '%' }" /></div>
-              <span class="mono">{{ fmt(p.n) }}</span>
+              <span class="mono rx-count" :style="{ minWidth: countWidth(list.rows) }">{{ fmt(p.n) }}</span>
             </div>
           </div>
         </div>
@@ -132,6 +132,8 @@ const { fmt, dstr, pluralize, rawMessage, locale } = useFormatters()
 const nf1 = (n) =>
   new Intl.NumberFormat(locale.value === 'ru' ? 'ru-RU' : 'en-US', { maximumFractionDigits: 1 }).format(n)
 
+const countWidth = (rows) => `${fmt(rows[0]?.n ?? 0).length}ch`
+
 const nf2 = (n) =>
   new Intl.NumberFormat(locale.value === 'ru' ? 'ru-RU' : 'en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 
@@ -171,6 +173,10 @@ const people = computed(() => [
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.rx-count {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 .rx-arrow {
   opacity: 0.55;
