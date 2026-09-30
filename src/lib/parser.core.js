@@ -93,6 +93,33 @@ function dayOfDate(date) {
   return Number.isNaN(day) ? null : day
 }
 
+/** Telegram writes ids as "user123" (new exports) or plain 123 (old ones) — treat them as one id. */
+const normId = (id) => (/^\d+$/.test(String(id)) ? `user${id}` : String(id))
+
+function noteName(tok, id, name, day, kind) {
+  if (!name) return
+  const rec = tok.names[id] || (tok.names[id] = { m: new Map(), r: new Map() })
+  const seen = rec[kind].get(name)
+  if (seen) {
+    seen.n++
+    if (day > seen.last) seen.last = day
+  } else {
+    rec[kind].set(name, { n: 1, last: day })
+  }
+}
+
+/** Name of an id: names from its own messages win over names from reactions */
+function nameOf(tok, id) {
+  const rec = tok.names[id]
+  if (!rec) return null
+  const pool = rec.m.size ? rec.m : rec.r
+  let best = null
+  for (const [name, e] of pool) {
+    if (!best || e.last > best.e.last || (e.last === best.e.last && e.n > best.e.n)) best = { name, e }
+  }
+  return best ? best.name : null
+}
+
 function pushMessage(list, item) {
   list.push(item)
   list.sort((p, q) => q.n - p.n)
@@ -118,8 +145,8 @@ function ingestReactions(store, message, dayNum, uid, userTok, rcount) {
 
     const recent = Array.isArray(reaction.recent) ? reaction.recent : []
     for (const who of recent) {
-      const rid = who.from_id
-      if (rid && who.from) store.tok.names[rid] = store.tok.names[rid] || who.from
+      const rid = who.from_id ? normId(who.from_id) : null
+      if (rid) noteName(store.tok, rid, who.from, dayNum, 'r')
       const reactorTok = rid ? store.tok.users[rid] || (store.tok.users[rid] = createTok()) : null
 
       if (key) {
@@ -263,7 +290,7 @@ function buildPairs(tok, users) {
 
   return rows.slice(0, PAIR_LIMIT).map(([key, n, days]) => {
     const [a, r] = key.split('\t')
-    return { a, r, an: users[a]?.name ?? null, rn: tok.names[r] ?? users[r]?.name ?? null, n, ...sparseDays(days) }
+    return { a, r, an: nameOf(tok, a) ?? users[a]?.name ?? null, rn: nameOf(tok, r) ?? users[r]?.name ?? null, n, ...sparseDays(days) }
   })
 }
 
@@ -329,9 +356,10 @@ function ingestChat(store, chat) {
     if (store.seen.has(key)) continue
     store.seen.add(key)
 
-    const uid = message.from_id || message.from || '?'
+    const uid = message.from_id ? normId(message.from_id) : message.from || '?'
     const user = store.users[uid] || (store.users[uid] = createBucket(message.from || null))
     const userTok = store.tok.users[uid] || (store.tok.users[uid] = createTok())
+    noteName(store.tok, uid, message.from, dayOfDate(message.date), 'm')
 
     const date = message.date // "YYYY-MM-DDTHH:mm:ss"
     const dayNum = Math.floor(Date.UTC(+date.slice(0, 4), +date.slice(5, 7) - 1, +date.slice(8, 10)) / 864e5)
@@ -414,6 +442,10 @@ export function snapshot(store) {
   if (!tok) return rest
 
   const users = { ...store.users }
+  for (const id in users) {
+    const name = nameOf(tok, id)
+    if (name && name !== users[id].name) users[id] = { ...users[id], name }
+  }
   const busiest = Object.keys(users).sort((a, b) => users[b].n - users[a].n).slice(0, TOP_USERS)
   const sig = buildSignatures(store, tok, busiest)
   for (const id of busiest) users[id] = { ...users[id], top: buildTop(tok.users[id]), sig: sig[id] || null }
