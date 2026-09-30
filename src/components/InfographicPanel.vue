@@ -132,7 +132,7 @@ async function draw() {
     for (let h = 0; h < 24; h++) {
       const v = a.hd[d * 24 + h]
       ctx.fillStyle = `rgba(94,234,212,${v ? 0.15 + 0.85 * Math.sqrt(v / max) : 0.06})`
-      ctx.fillRect(PAD + 56 + h * 36, 1546 + d * 32, 33, 29)
+      ctx.fillRect(PAD + 56 + h * 36, 1546 + d * 32, 34, 30)
     }
   }
   ;[0, 6, 12, 18].forEach((h) => text(String(h), PAD + 56 + h * 36, 1795, `400 20px ${MONO}`, MUTED))
