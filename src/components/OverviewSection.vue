@@ -86,8 +86,8 @@
                 :key="di + '-' + hIdx"
                 :x="34 + (hIdx - 1) * 25"
                 :y="16 + di * 26"
-                width="22"
-                height="22"
+                width="23"
+                height="24"
                 fill="rgb(var(--v-theme-primary))"
                 :fill-opacity="opacity(bucket.hd[di * 24 + hIdx - 1])"
               >
