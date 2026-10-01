@@ -89,6 +89,9 @@ export default {
     noWords: 'Not enough text for a word cloud',
     noEmoji: 'No emoji found',
     times: '{count} times',
+    trendYear: 'Word of the year',
+    trendMonth: 'Word of the month',
+    trendTile: '{count} times \u00b7 \u00d7{lift} to usual',
   },
 
   reactions: {

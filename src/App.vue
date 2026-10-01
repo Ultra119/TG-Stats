@@ -53,7 +53,7 @@
             @save-page="onSavePage"
           />
 
-          <WordsSection :num="nums.words" :is-all="isAll" :words="topWords" :emoji="topEmoji" :signature="signature" />
+          <WordsSection :num="nums.words" :is-all="isAll" :words="topWords" :emoji="topEmoji" :signature="signature" :trends="wordTrends" />
 
           <ReactionsSection v-if="reactions" :num="nums.reactions" :is-all="isAll" :data="reactions" />
 
@@ -119,7 +119,7 @@ const { dstr } = useFormatters()
 const {
   has, isEmpty, bounds, view,
   isAll, bucket, items, board, stats, vol, tm, yearSeries, chatList, chatName, ach, done, displayName,
-  topWords, topEmoji, signature, reactions, myRoles,
+  topWords, topEmoji, wordTrends, signature, reactions, myRoles,
 } = useAnalytics(store, sel, range)
 
 // Section numbers depend on which optional sections are shown (reactions, members).

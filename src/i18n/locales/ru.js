@@ -89,6 +89,9 @@ export default {
     noWords: 'Недостаточно текста для облака слов',
     noEmoji: 'Эмодзи не найдены',
     times: '{count} раз',
+    trendYear: 'Слово года',
+    trendMonth: 'Слово месяца',
+    trendTile: '{count} раз \u00b7 \u00d7{lift} к обычному',
   },
 
   reactions: {

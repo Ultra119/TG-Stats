@@ -416,6 +416,10 @@ export function rankTop(bucket, kind, range, limit) {
   return rows.sort((x, y) => y.n - x.n).slice(0, limit)
 }
 
+export function wordSeries(bucket) {
+  return (bucket?.top?.words ?? []).map((e) => ({ key: e.k, d: e.d, c: e.c }))
+}
+
 export function emojiGlyph(key) {
   return key.length === 1 ? key + '\uFE0F' : key // BMP symbols like ❤ need VS16 to render as emoji
 }

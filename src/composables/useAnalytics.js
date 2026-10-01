@@ -1,8 +1,9 @@
 import { computed, ref, toRaw, watch } from 'vue'
 import {
   PAGE_CHARS, calcStats, buildBoard, buildAchievements, buildYearSeries, filterStore,
-  rankTop, signatureWords, reactionsGiven, topMessages, rankPairs, topPairs, buildReactionRoles,
+  rankTop, wordSeries, signatureWords, reactionsGiven, topMessages, rankPairs, topPairs, buildReactionRoles,
 } from '../lib/analytics.js'
+import { buildWordTrends } from '../lib/wordTrends.js'
 import { useFormatters } from './useFormatters.js'
 
 /**
@@ -158,6 +159,11 @@ export function useAnalytics(store, sel, range = ref({ from: null, to: null })) 
   const topWords = computed(() => rankTop(bucket.value, 'words', topRange.value, 60))
   const topEmoji = computed(() => rankTop(bucket.value, 'emoji', topRange.value, 24))
 
+  const wordTrends = computed(() => {
+    if (!ready.value) return null
+    return buildWordTrends(wordSeries(bucket.value), view.value.range)
+  })
+
   // Signature words: one entry for the selected member, or one per top member for the whole chat.
   const signature = computed(() => {
     if (!ready.value) return []
@@ -201,6 +207,6 @@ export function useAnalytics(store, sel, range = ref({ from: null, to: null })) 
   return {
     has, ready, isEmpty, filtered, bounds, view,
     isAll, bucket, items, board, stats, vol, tm, yearSeries, chatList, chatName, ach, done, displayName,
-    topWords, topEmoji, signature, reactions, myRoles,
+    topWords, topEmoji, wordTrends, signature, reactions, myRoles,
   }
 }

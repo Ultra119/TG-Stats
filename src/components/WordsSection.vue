@@ -27,6 +27,12 @@
       </v-card>
     </div>
 
+    <!-- Word of the year / month: how the leading word rose and faded -->
+    <v-card v-if="trends" variant="flat" border class="tile mt-3">
+      <div class="k">{{ t(trends.unit === 'year' ? 'words.trendYear' : 'words.trendMonth') }}</div>
+      <WordTimeline :trends="trends" />
+    </v-card>
+
     <v-card v-if="isAll ? signature.length : true" variant="flat" border class="tile mt-3">
       <div class="k">{{ isAll ? t('words.signatureHeadingChat') : t('words.signatureHeading') }}</div>
 
@@ -51,6 +57,7 @@ import { useI18n } from 'vue-i18n'
 import { useFormatters } from '../composables/useFormatters.js'
 import SectionDownload from './SectionDownload.vue'
 import EmojiGrid from './EmojiGrid.vue'
+import WordTimeline from './WordTimeline.vue'
 
 const props = defineProps({
   num: { type: String, default: '03' }, // section number
@@ -58,6 +65,7 @@ const props = defineProps({
   words: { type: Array, required: true }, // [{ key, n }], sorted desc
   emoji: { type: Array, required: true }, // [{ key, n }], sorted desc
   signature: { type: Array, default: () => [] }, // [{ id, name, words: [{ key, n, ratio }] }]
+  trends: { type: Object, default: null }, // buildWordTrends() result, null = not enough history
 })
 
 const { t } = useI18n()
