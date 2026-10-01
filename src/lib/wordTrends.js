@@ -100,25 +100,32 @@ export function buildWordTrends(
   }
   candidates.sort((a, b) => b.score - a.score)
 
+  let first = 0
+  while (first < B - 1 && !binTotals[first]) first++
+  let last = B - 1
+  while (last > first && !binTotals[last]) last--
+
   const prior = (0.1 * all) / B // "virtual" words per bin pulling a sparse bin to the word's overall share
   const radius = unit === 'year' ? 1 : 2
   const curveOf = (w) => {
     const overall = w.sum / all
+    const lo = Math.max(first, w.binCounts.findIndex((n) => n > 0))
     const share = w.binCounts.map((n, b) => (n + prior * overall) / (binTotals[b] + prior))
     const smooth = share.map((_, b) => {
+      if (b < lo || b > last) return null
       let sum = 0
       let weight = 0
       for (let k = -radius; k <= radius; k++) {
-        const v = share[b + k]
-        if (v === undefined) continue
+        const i = b + k
+        if (i < lo || i > last) continue // bins before the first use must not bleed into the start
         const wt = radius + 1 - Math.abs(k)
-        sum += v * wt
+        sum += share[i] * wt
         weight += wt
       }
       return sum / weight
     })
-    const peak = Math.max(...smooth, 2 * overall) || 1
-    return smooth.map((v) => v / peak)
+    const peak = Math.max(...smooth.filter((v) => v !== null), 2 * overall) || 1
+    return smooth.map((v) => (v === null ? null : v / peak))
   }
 
   const leaders = new Array(P).fill(null)

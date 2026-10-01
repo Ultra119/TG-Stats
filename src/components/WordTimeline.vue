@@ -178,9 +178,15 @@ const chart = computed(() => {
   const curves = periods
     .map((p, k) => {
       if (!p.leader) return null
-      const ys = p.leader.curve.map((v) => plotBottom - 1 - v * (PLOT_H - 14))
-      // run the line out to both edges of the frame
-      const pts = [{ x: 0, y: ys[0] }, ...centers.map((x, b) => ({ x, y: ys[b] })), { x: W, y: ys[ys.length - 1] }]
+      const ys = p.leader.curve.map((v) => (v == null ? null : plotBottom - 1 - v * (PLOT_H - 14)))
+      const from = ys.findIndex((y) => y !== null)
+      if (from < 0) return null
+      let to = ys.length - 1
+      while (to > from && ys[to] === null) to--
+      const pts = []
+      if (from === 0) pts.push({ x: 0, y: ys[0] })
+      for (let b = from; b <= to; b++) pts.push({ x: centers[b], y: ys[b] })
+      if (to === ys.length - 1) pts.push({ x: W, y: ys[to] })
       const line = pts.map((q, n) => `${n ? 'L' : 'M'}${f(q.x)} ${f(q.y)}`).join('')
       return {
         i: p.i,
@@ -189,7 +195,7 @@ const chart = computed(() => {
         x: bands[k].x,
         w: bands[k].w,
         line,
-        area: `${line}L${W} ${plotBottom}L0 ${plotBottom}Z`,
+        area: `${line}L${f(pts[pts.length - 1].x)} ${plotBottom}L${f(pts[0].x)} ${plotBottom}Z`,
       }
     })
     .filter(Boolean)
