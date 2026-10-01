@@ -47,7 +47,7 @@
       </g>
 
       <g v-for="b in chart.bands.filter((b) => b.leader)" :key="'word' + b.i" class="wt-fade" :style="{ opacity: hasSel && !isSel(b.i) ? 0.45 : 1 }">
-        <rect :x="b.x + 9" :y="b.wordY - 9" width="8" height="8" :fill="b.color" />
+        <rect v-if="b.w >= 18" :x="b.x + 9" :y="b.wordY - 9" width="8" height="8" :fill="b.color" />
         <text :x="b.x + 22" :y="b.wordY" class="wt-word" :style="isSel(b.i) ? { fill: b.color } : null">{{ b.word }}</text>
         <text v-if="b.lift" :x="b.x + 22" y="37" class="wt-lift" :style="{ fill: b.color }">{{ b.lift }}</text>
         <rect v-if="isSel(b.i)" :x="b.x" :y="chart.headH - 3" :width="b.w" height="3" :fill="b.color" />
@@ -138,8 +138,9 @@ const chart = computed(() => {
   const total = span.to - span.from + 1
   const xOf = (day) => ((day - span.from) / total) * W // day = start of that day
 
-  const minBand = Math.min(...periods.map((p) => xOf(p.to + 1) - xOf(p.from)))
-  const stagger = minBand < 84
+  const widths = periods.map((p) => xOf(p.to + 1) - xOf(p.from))
+  const inner = widths.length > 2 ? widths.slice(1, -1) : widths
+  const stagger = Math.min(...inner) < 84
   const step = stagger ? 2 : 1
   const headH = stagger ? 54 : 48
   const plotBottom = headH + PLOT_H
@@ -150,8 +151,9 @@ const chart = computed(() => {
     const w = xOf(p.to + 1) - x
     const leader = p.leader
     const reach = periods[k + step] ? xOf(periods[k + step].from) : W
-    const maxChars = Math.max(3, Math.floor((reach - x - 29) / 7.8))
-    const word = leader ? (leader.key.length > maxChars ? leader.key.slice(0, maxChars - 1) + '\u2026' : leader.key) : ''
+    const avail = reach - x - 29 // room for the word after the swatch
+    const maxChars = Math.max(3, Math.floor(avail / 7.8))
+    const word = !leader || avail < 24 ? '' : leader.key.length > maxChars ? leader.key.slice(0, maxChars - 1) + '\u2026' : leader.key
     const label = unit === 'year' ? String(p.year) : months[p.month].slice(0, 3).toUpperCase()
     const hint = leader ? t('words.trendTile', { count: fmt(leader.count), lift: liftText(leader.lift) }) : ''
     const row = stagger && k % 2 === 1
@@ -164,7 +166,7 @@ const chart = computed(() => {
       row,
       wordY: row ? 42 : 20,
       color: PALETTE[p.i % PALETTE.length],
-      lift: leader && !stagger && w >= 83 ? `\u00d7${liftText(leader.lift)}` : '',
+      lift: leader && !stagger && w >= 60 ? `\u00d7${liftText(leader.lift)}` : '',
       label,
       sub: unit === 'month' && (p.i === 0 || p.month === 0) ? String(p.year) : '',
       tooltip: leader ? `${unit === 'year' ? label : `${months[p.month]} ${p.year}`}: ${leader.key} \u00b7 ${hint}` : '',
