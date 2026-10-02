@@ -57,6 +57,8 @@
 
           <ReactionsSection v-if="reactions" :num="nums.reactions" :is-all="isAll" :data="reactions" />
 
+          <LifeSection v-if="life" :num="nums.life" :life="life" />
+
           <MembersSection v-if="isAll" :num="nums.members" :board="board" :chat-list="chatList" @select="sel = $event" />
 
           <AchievementsSection
@@ -100,6 +102,7 @@ import UploadPanel from './components/UploadPanel.vue'
 import OverviewSection from './components/OverviewSection.vue'
 import WordsSection from './components/WordsSection.vue'
 import ReactionsSection from './components/ReactionsSection.vue'
+import LifeSection from './components/LifeSection.vue'
 import MembersSection from './components/MembersSection.vue'
 import AchievementsSection from './components/AchievementsSection.vue'
 import InfographicPanel from './components/InfographicPanel.vue'
@@ -119,17 +122,18 @@ const { dstr } = useFormatters()
 const {
   has, isEmpty, bounds, view,
   isAll, bucket, items, board, stats, vol, tm, yearSeries, chatList, chatName, ach, done, displayName,
-  topWords, topEmoji, wordTrends, signature, reactions, myRoles,
+  topWords, topEmoji, wordTrends, life, signature, reactions, myRoles,
 } = useAnalytics(store, sel, range)
 
-// Section numbers depend on which optional sections are shown (reactions, members).
+// Section numbers depend on which optional sections are shown (reactions, life, members).
 const nums = computed(() => {
   let i = 2
   const next = () => String(++i).padStart(2, '0')
   const words = next()
   const reactionsNum = reactions.value ? next() : null
+  const lifeNum = life.value ? next() : null
   const members = isAll.value ? next() : null
-  return { words, reactions: reactionsNum, members, ach: next(), info: next() }
+  return { words, reactions: reactionsNum, life: lifeNum, members, ach: next(), info: next() }
 })
 
 watch(locale, (l) => { document.documentElement.lang = l }, { immediate: true })

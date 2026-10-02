@@ -373,7 +373,7 @@ export function filterStore(store, range) {
   const to = Math.min(range?.to ?? last, last)
 
   if (from <= first && to >= last) {
-    return { users: store.users, all: store.all, list: store.list, files: store.files, chats: store.chats, pairs: store.pairs || [], range: { from: first, to: last }, full: true }
+    return { users: store.users, all: store.all, list: store.list, files: store.files, chats: store.chats, pairs: store.pairs || [], ev: store.ev || null, range: { from: first, to: last }, full: true }
   }
 
   const monthCache = new Map()
@@ -396,6 +396,7 @@ export function filterStore(store, range) {
     files: store.files,
     chats: store.chats,
     pairs: store.pairs || [],
+    ev: store.ev || null,
     range: { from, to },
     full: false,
   }
@@ -513,4 +514,141 @@ export function buildReactionRoles(view, range) {
   if (giver) roles.push({ role: 'mostGiving', id: giver.id, name: giver.name, count: giver.given })
 
   return roles
+}
+
+const NAMES_MAX = 200
+const FEED_MAX = 150
+const FLOW_MONTHS_MAX = 48
+const FEED_RANK = { first: 0, create: 1, rename: 2 }
+
+const monthIndex = (day) => {
+  const d = new Date(day * 864e5)
+  return d.getUTCFullYear() * 12 + d.getUTCMonth()
+}
+const peopleOf = (r) => r.x ?? 1
+
+export function buildLife(ev, range, id = '*', anchors = {}) {
+  if (!ev) return null
+  const all = id === '*'
+  const inRange = (d) => !range || (d >= range.from && d <= range.to)
+  const rows = ev.rows.filter((r) => inRange(r.d) && (all || r.u === id))
+
+  const flowDays = []
+  let flowJoined = 0
+  let flowLeft = 0
+  if (all) {
+    const f = ev.flow
+    for (let i = 0; i < f.d.length; i++) {
+      if (!inRange(f.d[i]) || (!f.j[i] && !f.l[i])) continue
+      flowDays.push([f.d[i], f.j[i], f.l[i]])
+      flowJoined += f.j[i]
+      flowLeft += f.l[i]
+    }
+  }
+  if (!rows.length && !flowDays.length) return null
+
+  const ofKind = (k) => rows.filter((r) => r.k === k)
+  const sum = (list, f) => list.reduce((n, r) => n + f(r), 0)
+  const byActor = (list, add) => {
+    const g = new Map()
+    for (const r of list) {
+      const key = r.u ?? r.n ?? '?'
+      const e = g.get(key) || { id: r.u, name: r.n, n: 0, seconds: 0 }
+      add(e, r)
+      g.set(key, e)
+    }
+    return [...g.values()].sort((a, b) => b.n - a.n)
+  }
+
+  const joins = ofKind('join')
+  const leaves = ofKind('leave')
+  const people = {
+    joined: all ? flowJoined : joins.length,
+    left: all ? flowLeft : leaves.length,
+    invited: sum(ofKind('invite'), peopleOf),
+    kicked: sum(ofKind('kick'), peopleOf),
+    joinedDay: !all && joins.length ? joins[0].d : null,
+    leftDay: !all && leaves.length ? leaves[leaves.length - 1].d : null,
+  }
+
+  const titles = rows
+    .filter((r) => r.k === 'create' || r.k === 'rename')
+    .map((r) => ({ day: r.d, kind: r.k, title: r.t, by: r.n, byId: r.u }))
+
+  const pins = ofKind('pin')
+  const pinners = all ? byActor(pins, (e) => e.n++).slice(0, 5) : []
+
+  const calls = ofKind('call')
+  const answered = calls.filter((r) => r.s > 0)
+  const seconds = sum(answered, (r) => r.s)
+  const longest = answered.reduce((best, r) => (!best || r.s > best.s ? r : best), null)
+  const callers = all ? byActor(calls, (e, r) => {
+    e.n++
+    e.seconds += r.s
+  }).slice(0, 5) : []
+  const groupCalls = ofKind('gcall')
+
+  let flow = null
+  if (flowDays.length && flowJoined + flowLeft > 0) {
+    const m0 = monthIndex(flowDays[0][0])
+    const m1 = monthIndex(flowDays[flowDays.length - 1][0])
+    const yearly = m1 - m0 + 1 > FLOW_MONTHS_MAX
+    const keyOf = (day) => (yearly ? Math.floor(monthIndex(day) / 12) : monthIndex(day))
+    const k0 = yearly ? Math.floor(m0 / 12) : m0
+    const k1 = yearly ? Math.floor(m1 / 12) : m1
+    const bins = Array.from({ length: k1 - k0 + 1 }, (_, i) => {
+      const k = k0 + i
+      return { year: yearly ? k : Math.floor(k / 12), month: yearly ? null : k % 12, joined: 0, left: 0 }
+    })
+    for (const [day, j, l] of flowDays) {
+      const b = bins[keyOf(day) - k0]
+      b.joined += j
+      b.left += l
+    }
+    if (bins.length >= 2) flow = { unit: yearly ? 'year' : 'month', bins }
+  }
+
+  const feed = []
+  if (anchors.first != null && inRange(anchors.first)) feed.push({ day: anchors.first, k: 'first', major: true })
+  if (anchors.record?.n > 1 && inRange(anchors.record.day)) feed.push({ day: anchors.record.day, k: 'record', n: anchors.record.n, major: true })
+  for (const t of titles) feed.push({ day: t.day, k: t.kind, title: t.title, by: t.by, major: true })
+  if (longest && longest.s >= 60) feed.push({ day: longest.d, k: 'call', s: longest.s, by: longest.n, major: true })
+
+  const grouped = new Map()
+  for (const r of rows) {
+    if (!['join', 'leave', 'invite', 'kick'].includes(r.k)) continue
+    const key = `${r.d}|${r.k}|${r.u ?? ''}`
+    const g = grouped.get(key) || { day: r.d, k: r.k, n: 0, names: [], by: r.k === 'invite' || r.k === 'kick' ? r.n : null }
+    g.n += peopleOf(r)
+    for (const name of r.k === 'join' || r.k === 'leave' ? [r.n] : r.m || []) {
+      if (name && g.names.length < NAMES_MAX && !g.names.includes(name)) g.names.push(name)
+    }
+    grouped.set(key, g)
+  }
+  let minor = [...grouped.values()]
+  const room = Math.max(0, FEED_MAX - feed.length)
+  if (minor.length > room) minor = minor.sort((a, b) => b.n - a.n).slice(0, room)
+
+  const sorted = [...feed, ...minor].sort((a, b) => a.day - b.day || (FEED_RANK[a.k] ?? 3) - (FEED_RANK[b.k] ?? 3))
+
+  return {
+    scope: all ? 'chat' : 'member',
+    people,
+    titles,
+    renames: titles.filter((t) => t.kind === 'rename').length,
+    photos: ofKind('photo').length,
+    pins: { n: pins.length, by: pinners },
+    calls: {
+      n: calls.length,
+      answered: answered.length,
+      missed: calls.length - answered.length,
+      seconds,
+      avg: answered.length ? seconds / answered.length : 0,
+      longest: longest ? { s: longest.s, day: longest.d, by: longest.n } : null,
+      by: callers,
+      group: { n: groupCalls.length, seconds: sum(groupCalls, (r) => r.s) },
+    },
+    flow,
+    feed: sorted,
+  }
 }

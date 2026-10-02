@@ -10,6 +10,8 @@ const SIG_MIN_MESSAGES = 30 // members with fewer messages get no signature word
 const PAIR_LIMIT = 300 // reactor -> author pairs kept
 const MSG_LIMIT = 8 // most-reacted messages kept per bucket
 const PREVIEW_LEN = 140
+const MOVE_ROWS_LIMIT = 5000 // individual join/leave rows kept (the per-day counts in `flow` are never capped)
+const NAMES_SAMPLE = 200 // member names kept per invite/kick row (a safety cap, not a display limit)
 
 const STOP = new Set(
   `это как так что чтобы или для при над под про без нет вот было были была был будет будто есть уже еще ещё
@@ -319,7 +321,7 @@ export function createStore() {
     users: {}, // uid -> bucket
     all: createBucket(null), // display name resolved via i18n ('members.wholeChat')
     seen: new Set(), // dedupe key across files: `${chatId}:${msgId}`
-    tok: { users: {}, all: createTok(), pairs: new Map(), names: {} }, // word/emoji/reaction counters (worker only, stripped by `snapshot`)
+    tok: { users: {}, all: createTok(), pairs: new Map(), names: {}, ev: { rows: [], moves: 0, flow: new Map() } }, // word/emoji/reaction counters and service events (worker only, stripped by `snapshot`)
     files: [], // names of uploaded files
     chats: 0, // number of chats processed
     list: [], // [{ name, first, last, n, days }] — one entry per source chat; `days` is dayNum -> count, for range slicing
@@ -342,6 +344,85 @@ function extractLength(text) {
   return 0
 }
 
+function serviceRow(message, day) {
+  const name = message.actor ?? message.from ?? null
+  const rawId = message.actor_id ?? message.from_id ?? null
+  const u = rawId ? normId(rawId) : null
+  const members = Array.isArray(message.members) ? message.members.filter((m) => typeof m === 'string' && m) : []
+  const row = (k, extra) => ({ d: day, k, u, n: name, ...extra })
+
+  switch (message.action) {
+    case 'create_group':
+    case 'create_channel':
+      return row('create', { t: message.title || null })
+    case 'edit_group_title':
+      return row('rename', { t: message.title || null })
+    case 'edit_group_photo':
+    case 'delete_group_photo':
+      return row('photo')
+    case 'pin_message':
+      return row('pin')
+    case 'join_group_by_link':
+    case 'join_group_by_request':
+      return row('join')
+    case 'invite_members':
+      if (members.length === 1 && members[0] === name) return row('join')
+      return members.length ? row('invite', { x: members.length, m: members.slice(0, NAMES_SAMPLE) }) : null
+    case 'remove_members':
+      if (members.length === 1 && members[0] === name) return row('leave')
+      return members.length ? row('kick', { x: members.length, m: members.slice(0, NAMES_SAMPLE) }) : null
+    case 'phone_call': {
+      const s = Number(message.duration_seconds ?? message.duration) || 0
+      return row('call', { s, r: message.discard_reason || null })
+    }
+    case 'group_call':
+      return row('gcall', { s: Number(message.duration ?? message.duration_seconds) || 0 })
+    default:
+      return null
+  }
+}
+
+function ingestService(store, chatId, message) {
+  const key = `${chatId}:${message.id}`
+  if (store.seen.has(key)) return false
+  const day = dayOfDate(message.date)
+  if (day == null) return false
+  const row = serviceRow(message, day)
+  if (!row) return false
+  store.seen.add(key)
+
+  const ev = store.tok.ev
+  if (row.u) noteName(store.tok, row.u, row.n, day, 'r')
+
+  // people flow: a member list changed
+  const joined = row.k === 'join' ? 1 : row.k === 'invite' ? row.x : 0
+  const left = row.k === 'leave' ? 1 : row.k === 'kick' ? row.x : 0
+  if (joined || left) {
+    const f = ev.flow.get(day) || ev.flow.set(day, [0, 0]).get(day)
+    f[0] += joined
+    f[1] += left
+    if (ev.moves >= MOVE_ROWS_LIMIT) return true
+    ev.moves++
+  }
+  ev.rows.push(row)
+  return true
+}
+
+function buildEvents(tok) {
+  const rows = tok.ev.rows
+    .map((r) => (r.u ? { ...r, n: nameOf(tok, r.u) ?? r.n } : r))
+    .sort((a, b) => a.d - b.d)
+  const days = [...tok.ev.flow.keys()].sort((a, b) => a - b)
+  return {
+    rows,
+    flow: {
+      d: Int32Array.from(days),
+      j: Int32Array.from(days, (d) => tok.ev.flow.get(d)[0]),
+      l: Int32Array.from(days, (d) => tok.ev.flow.get(d)[1]),
+    },
+  }
+}
+
 function ingestChat(store, chat) {
   const chatId = chat.id ?? chat.name
   let count = 0
@@ -350,7 +431,12 @@ function ingestChat(store, chat) {
   const chatDays = {}
 
   for (const message of chat.messages || []) {
-    if (message.type !== 'message' || !message.date) continue
+    if (!message.date) continue
+    if (message.type === 'service') {
+      ingestService(store, chatId, message)
+      continue
+    }
+    if (message.type !== 'message') continue
 
     const key = `${chatId}:${message.id}`
     if (store.seen.has(key)) continue
@@ -450,7 +536,7 @@ export function snapshot(store) {
   const sig = buildSignatures(store, tok, busiest)
   for (const id of busiest) users[id] = { ...users[id], top: buildTop(tok.users[id]), sig: sig[id] || null }
 
-  return { ...rest, users, all: { ...store.all, top: buildTop(tok.all) }, pairs: buildPairs(tok, store.users) }
+  return { ...rest, users, all: { ...store.all, top: buildTop(tok.all) }, pairs: buildPairs(tok, store.users), ev: buildEvents(tok) }
 }
 
 const DEMO_WORDS = `coffee weekend movie tonight dinner music sunset project deadline birthday travel airport pizza concert
@@ -508,6 +594,34 @@ export function ingestDemo(store) {
       text: demoText(isA ? 10 + Math.floor(rnd() * 140) : 3 + Math.floor(rnd() * 40), isA ? 0 : 7),
       ...demoReactions(isA, date, hour),
       ...(roll < 0.08 ? { photo: 'p.jpg' } : roll < 0.11 ? { media_type: 'voice_message' } : {}),
+    })
+  }
+
+  // service messages: a small chat life
+  let sid = 100000
+  const svc = (date, action, extra = {}) => messages.push({ id: sid++, type: 'service', date: `${date}T12:00:00`, action, ...extra })
+  const A = { actor: 'Alex', actor_id: 'user1' }
+  const S = { actor: 'Sam', actor_id: 'user2' }
+  svc('2019-01-05', 'create_group', { ...A, title: 'Demo chat' })
+  svc('2019-01-05', 'invite_members', { ...A, members: ['Sam'] })
+  svc('2019-03-14', 'invite_members', { ...A, members: ['Mia', 'Leo'] })
+  svc('2019-11-02', 'edit_group_title', { ...S, title: 'Demo chat (weekend)' })
+  svc('2020-06-21', 'join_group_by_link', { actor: 'Kai', actor_id: 'user5', inviter: 'Alex' })
+  svc('2021-02-10', 'remove_members', { actor: 'Mia', actor_id: 'user3', members: ['Mia'] })
+  svc('2021-09-30', 'remove_members', { ...A, members: ['Leo'] })
+  svc('2022-07-18', 'edit_group_title', { ...A, title: 'Coffee & movies' })
+  svc('2022-07-18', 'edit_group_photo', A)
+  svc('2023-04-01', 'join_group_by_request', { actor: 'Nora', actor_id: 'user6' })
+  for (let i = 0; i < 24; i++) {
+    const d = new Date(Date.UTC(2019 + Math.floor(rnd() * 6), Math.floor(rnd() * 12), 1 + Math.floor(rnd() * 28)))
+    svc(d.toISOString().slice(0, 10), 'pin_message', { ...(rnd() < 0.6 ? A : S), message_id: i })
+  }
+  for (let i = 0; i < 70; i++) {
+    const d = new Date(Date.UTC(2019 + Math.floor(rnd() ** 0.8 * 6), Math.floor(rnd() * 12), 1 + Math.floor(rnd() * 28)))
+    const missed = rnd() < 0.25
+    svc(d.toISOString().slice(0, 10), 'phone_call', {
+      ...(rnd() < 0.55 ? A : S),
+      ...(missed ? { discard_reason: 'missed' } : { duration_seconds: 20 + Math.floor(rnd() ** 2 * 4200), discard_reason: 'hangup' }),
     })
   }
 

@@ -1,7 +1,7 @@
 import { computed, ref, toRaw, watch } from 'vue'
 import {
   PAGE_CHARS, calcStats, buildBoard, buildAchievements, buildYearSeries, filterStore,
-  rankTop, wordSeries, signatureWords, reactionsGiven, topMessages, rankPairs, topPairs, buildReactionRoles,
+  rankTop, wordSeries, signatureWords, reactionsGiven, topMessages, rankPairs, topPairs, buildReactionRoles, buildLife,
 } from '../lib/analytics.js'
 import { buildWordTrends } from '../lib/wordTrends.js'
 import { useFormatters } from './useFormatters.js'
@@ -26,6 +26,7 @@ export function useAnalytics(store, sel, range = ref({ from: null, to: null })) 
         files: toRaw(store.files),
         chats: store.chats,
         pairs: toRaw(store.pairs),
+        ev: toRaw(store.ev),
       },
       range.value,
     ),
@@ -164,6 +165,16 @@ export function useAnalytics(store, sel, range = ref({ from: null, to: null })) 
     return buildWordTrends(wordSeries(bucket.value), view.value.range)
   })
 
+  // Service messages (joins, renames, pins, calls…) of the chat or of the selected member.
+  const life = computed(() => {
+    if (!ready.value) return null
+    const s = stats.value
+    return buildLife(view.value.ev, topRange.value, sel.value, {
+      first: bucket.value.first,
+      record: s?.rec ? { day: s.recD, n: s.rec } : null,
+    })
+  })
+
   // Signature words: one entry for the selected member, or one per top member for the whole chat.
   const signature = computed(() => {
     if (!ready.value) return []
@@ -207,6 +218,6 @@ export function useAnalytics(store, sel, range = ref({ from: null, to: null })) 
   return {
     has, ready, isEmpty, filtered, bounds, view,
     isAll, bucket, items, board, stats, vol, tm, yearSeries, chatList, chatName, ach, done, displayName,
-    topWords, topEmoji, wordTrends, signature, reactions, myRoles,
+    topWords, topEmoji, wordTrends, life, signature, reactions, myRoles,
   }
 }
