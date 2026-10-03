@@ -215,6 +215,8 @@ export default {
     kickerChat: 'Итоги чата',
     kickerPersonal: 'Итоги участника',
     footer: 'Собрано в tg-stats \u00b7 {date}',
+    fullStats: 'Посмотреть полную статистику',
+    fullHint: 'Слова и эмодзи, реакции, жизнь чата и интерактивные графики — в полной версии:',
   },
 
   titleCard: {

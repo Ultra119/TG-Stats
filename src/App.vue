@@ -53,11 +53,11 @@
             @save-page="onSavePage"
           />
 
-          <WordsSection :num="nums.words" :is-all="isAll" :words="topWords" :emoji="topEmoji" :signature="signature" :trends="wordTrends" />
+          <WordsSection data-full-only :num="nums.words" :is-all="isAll" :words="topWords" :emoji="topEmoji" :signature="signature" :trends="wordTrends" />
 
-          <ReactionsSection v-if="reactions" :num="nums.reactions" :is-all="isAll" :data="reactions" />
+          <ReactionsSection v-if="reactions" data-full-only :num="nums.reactions" :is-all="isAll" :data="reactions" />
 
-          <LifeSection v-if="life" :num="nums.life" :life="life" />
+          <LifeSection v-if="life" data-full-only :num="nums.life" :life="life" />
 
           <MembersSection v-if="isAll" :num="nums.members" :board="board" :chat-list="chatList" @select="sel = $event" />
 
@@ -109,6 +109,8 @@ import InfographicPanel from './components/InfographicPanel.vue'
 import DateRangeFilter from './components/DateRangeFilter.vue'
 
 const { t, locale } = useI18n()
+
+const SITE_URL = import.meta.env.VITE_SITE_URL || `${location.origin}${import.meta.env.BASE_URL}`
 
 const store = shallowReactive(createStore())
 const sel = ref('*') // '*' = whole chat, otherwise a member uid
@@ -172,6 +174,9 @@ async function onSavePage() {
       period: `${dstr(from)} \u2014 ${dstr(to)}`,
       footer: t('exportPage.footer', { date: dstr(Math.floor(Date.now() / 864e5)) }),
       lang: locale.value,
+      fullUrl: SITE_URL,
+      fullLabel: t('exportPage.fullStats'),
+      fullHint: t('exportPage.fullHint'),
     })
     savePage(html, name)
   } catch (e) {

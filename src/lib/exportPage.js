@@ -86,12 +86,18 @@ async function collectCss() {
 }
 
 /**
- * @param {{ title: string, kicker: string, period: string, footer: string, lang: string }} meta
+ * The saved page is a static summary: sections marked `data-full-only` (interactive or heavy ones —
+ * words, reactions, chat life…) are left out and replaced by a link to the full version of the app.
+ *
+ * @param {{ title: string, kicker: string, period: string, footer: string, lang: string,
+ *           fullUrl?: string, fullLabel?: string, fullHint?: string }} meta
  * @returns {Promise<string>} the complete HTML document
  */
-export async function buildPageHtml({ title, kicker, period, footer, lang }) {
-  const sections = [...document.querySelectorAll('.export-section')]
+export async function buildPageHtml({ title, kicker, period, footer, lang, fullUrl = '', fullLabel = '', fullHint = '' }) {
+  const sections = [...document.querySelectorAll('.export-section')].filter((el) => !el.closest('[data-full-only]'))
   if (!sections.length) throw new Error('Nothing to export')
+
+  const link = /^https?:\/\//i.test(fullUrl) && fullLabel ? { href: esc(fullUrl), label: esc(fullLabel) } : null
 
   const container = sections[0].closest('.wrap') || sections[0].parentElement
   const chain = []
@@ -120,17 +126,19 @@ export async function buildPageHtml({ title, kicker, period, footer, lang }) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)}</title>
 <style>${css}</style>
-<style>body{margin:0;background:${esc(bg)}}.ep-head{padding:32px 0 8px}.ep-head h1{font-size:30px;font-weight:600;line-height:1.2;margin:6px 0 4px}.ep-foot{padding:32px 0 16px}</style>
+<style>body{margin:0;background:${esc(bg)}}.ep-head{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:16px;padding:32px 0 8px}.ep-head h1{font-size:30px;font-weight:600;line-height:1.2;margin:6px 0 4px}.ep-full{flex:none;margin-top:4px;padding:9px 14px;border:1px solid rgb(var(--v-theme-primary,94,234,212));color:rgb(var(--v-theme-primary,94,234,212));font:500 12px/1 var(--font-display,monospace);letter-spacing:.08em;text-transform:uppercase;text-decoration:none;white-space:nowrap}.ep-full:hover{background:rgba(var(--v-theme-primary,94,234,212),.12)}.ep-foot{padding:32px 0 16px}.ep-foot a{color:rgb(var(--v-theme-primary,94,234,212))}</style>
 </head>
 <body>
 ${open}
 <header class="ep-head">
-  <div class="label-eyebrow">${esc(kicker)}</div>
-  <h1>${esc(title)}</h1>
-  <div class="s">${esc(period)}</div>
+  <div>
+    <div class="label-eyebrow">${esc(kicker)}</div>
+    <h1>${esc(title)}</h1>
+    <div class="s">${esc(period)}</div>
+  </div>${link ? `\n  <a class="ep-full" href="${link.href}" target="_blank" rel="noopener">${link.label} &rarr;</a>` : ''}
 </header>
 ${body}
-<div class="s ep-foot">${esc(footer)}</div>
+<div class="s ep-foot">${link ? `${esc(fullHint)} <a href="${link.href}" target="_blank" rel="noopener">${link.label}</a><br>` : ''}${esc(footer)}</div>
 ${close}
 </body>
 </html>

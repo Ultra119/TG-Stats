@@ -215,6 +215,8 @@ export default {
     kickerChat: 'Chat summary',
     kickerPersonal: 'Member summary',
     footer: 'Generated with tg-stats \u00b7 {date}',
+    fullStats: 'View full statistics',
+    fullHint: 'Words & emoji, reactions, chat life and interactive charts are in the full version:',
   },
 
   titleCard: {
