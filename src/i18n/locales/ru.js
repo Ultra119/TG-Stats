@@ -21,6 +21,7 @@ export default {
   errors: {
     notExport: '«{name}»: не похоже на JSON-экспорт Telegram',
     empty: 'В файлах нет сообщений',
+    handoff: 'Не удалось открыть данные из сохранённой страницы',
   },
 
   members: {

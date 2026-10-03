@@ -1,3 +1,5 @@
+import { HANDOFF_HASH, MSG_READY, MSG_DATA } from './handoff.js'
+
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
 
 const normFamily = (s) => String(s || '').replace(/["']/g, '').trim()
@@ -86,18 +88,38 @@ async function collectCss() {
 }
 
 /**
+ * Inline script of a saved page: the "full statistics" link opens the app and, when the app asks
+ * (see handoff.js), sends it the packed data embedded in this very page.
+ */
+const handoffScript = () =>
+  `(function(){var READY=${JSON.stringify(MSG_READY)},DATA=${JSON.stringify(MSG_DATA)};` +
+  `document.addEventListener('click',function(e){` +
+  `var a=e.target.closest&&e.target.closest('a[data-full-link]');if(!a)return;` +
+  `var el=document.getElementById('tgs-data');if(!el)return;e.preventDefault();` +
+  `var url=a.href,origin=new URL(url).origin,payload=el.textContent.trim(),w=null;` +
+  `window.addEventListener('message',function(ev){` +
+  `if(w&&ev.source===w&&ev.data&&ev.data.type===READY)w.postMessage({type:DATA,payload:payload},origin)});` +
+  `w=window.open(url,'_blank');if(!w)location.href=url})})();`
+
+/**
  * The saved page is a static summary: sections marked `data-full-only` (interactive or heavy ones —
- * words, reactions, chat life…) are left out and replaced by a link to the full version of the app.
+ * words, reactions, chat life…) are left out. Instead there is a button that opens the full version of
+ * the app for this very chat / member: `fullData` (from handoff.packSnapshot) is embedded in the page
+ * and handed over to the app on click. Without `fullData` the button is a plain link to the app.
  *
  * @param {{ title: string, kicker: string, period: string, footer: string, lang: string,
- *           fullUrl?: string, fullLabel?: string, fullHint?: string }} meta
+ *           fullUrl?: string, fullLabel?: string, fullHint?: string, fullData?: string }} meta
  * @returns {Promise<string>} the complete HTML document
  */
-export async function buildPageHtml({ title, kicker, period, footer, lang, fullUrl = '', fullLabel = '', fullHint = '' }) {
+export async function buildPageHtml({ title, kicker, period, footer, lang, fullUrl = '', fullLabel = '', fullHint = '', fullData = '' }) {
   const sections = [...document.querySelectorAll('.export-section')].filter((el) => !el.closest('[data-full-only]'))
   if (!sections.length) throw new Error('Nothing to export')
 
-  const link = /^https?:\/\//i.test(fullUrl) && fullLabel ? { href: esc(fullUrl), label: esc(fullLabel) } : null
+  const embed = !!fullData && /^[A-Za-z0-9+/=]+$/.test(fullData)
+  const link =
+    /^https?:\/\//i.test(fullUrl) && fullLabel
+      ? { href: esc(embed ? fullUrl.replace(/#.*$/, '') + HANDOFF_HASH : fullUrl), label: esc(fullLabel), attr: embed ? ' data-full-link' : '' }
+      : null
 
   const container = sections[0].closest('.wrap') || sections[0].parentElement
   const chain = []
@@ -135,11 +157,11 @@ ${open}
     <div class="label-eyebrow">${esc(kicker)}</div>
     <h1>${esc(title)}</h1>
     <div class="s">${esc(period)}</div>
-  </div>${link ? `\n  <a class="ep-full" href="${link.href}" target="_blank" rel="noopener">${link.label} &rarr;</a>` : ''}
+  </div>${link ? `\n  <a class="ep-full" href="${link.href}"${link.attr} target="_blank">${link.label} &rarr;</a>` : ''}
 </header>
 ${body}
-<div class="s ep-foot">${link ? `${esc(fullHint)} <a href="${link.href}" target="_blank" rel="noopener">${link.label}</a><br>` : ''}${esc(footer)}</div>
-${close}
+<div class="s ep-foot">${link ? `${esc(fullHint)} <a href="${link.href}"${link.attr} target="_blank">${link.label}</a><br>` : ''}${esc(footer)}</div>
+${close}${link && embed ? `\n<script type="text/plain" id="tgs-data">${fullData}</script>\n<script>${handoffScript()}</script>` : ''}
 </body>
 </html>
 `

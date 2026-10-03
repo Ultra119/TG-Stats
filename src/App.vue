@@ -90,13 +90,14 @@
 </template>
 
 <script setup>
-import { shallowReactive, ref, watch, computed } from 'vue'
+import { shallowReactive, ref, watch, computed, toRaw, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createStore, addFiles, resetStore, loadDemo } from './lib/parser.js'
 import { useAnalytics } from './composables/useAnalytics.js'
 import { setLocale } from './i18n/index.js'
 import { useFormatters } from './composables/useFormatters.js'
 import { buildPageHtml, savePage } from './lib/exportPage.js'
+import { HANDOFF_HASH, packSnapshot, receiveHandoff } from './lib/handoff.js'
 
 import UploadPanel from './components/UploadPanel.vue'
 import OverviewSection from './components/OverviewSection.vue'
@@ -177,6 +178,7 @@ async function onSavePage() {
       fullUrl: SITE_URL,
       fullLabel: t('exportPage.fullStats'),
       fullHint: t('exportPage.fullHint'),
+      fullData: await packFullData(),
     })
     savePage(html, name)
   } catch (e) {
@@ -184,6 +186,36 @@ async function onSavePage() {
   }
   saving.value = false
 }
+
+async function packFullData() {
+  try {
+    return await packSnapshot({ ...toRaw(store) }, { sel: sel.value, range: range.value, lang: locale.value })
+  } catch (e) {
+    console.warn('Could not embed the data in the saved page:', e)
+    return '' // the page still gets a plain link to the app
+  }
+}
+
+async function importFromSavedPage() {
+  if (!window.opener || location.hash !== HANDOFF_HASH) return
+  busy.value = true
+  try {
+    const got = await receiveHandoff()
+    if (!got) return
+    Object.assign(store, got.snapshot)
+    sel.value = got.state.sel
+    range.value = got.state.range
+    if (got.state.lang === 'ru' || got.state.lang === 'en') setLocale(got.state.lang)
+  } catch (e) {
+    console.warn(e)
+    error.value = t('errors.handoff')
+  } finally {
+    busy.value = false
+    history.replaceState(null, '', location.pathname + location.search)
+  }
+}
+
+onMounted(importFromSavedPage)
 
 function onDemo() {
   return run(() => loadDemo(store))

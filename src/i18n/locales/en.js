@@ -21,6 +21,7 @@ export default {
   errors: {
     notExport: '"{name}" doesn\u2019t look like a Telegram JSON export',
     empty: 'No messages found in the uploaded files',
+    handoff: 'Couldn\u2019t open the data from the saved page',
   },
 
   members: {
